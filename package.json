@@ -1,0 +1,19 @@
+{
+  "name": "virtual-sports-cards",
+  "version": "1.0.0",
+  "description": "Virtual Sports Cards",
+  "main": "index.js",
+  "scripts": {
+    "prebuild": "if not exist dist mkdir dist",
+    "build:js": "terser js/cardRenderer.js js/uiHandler.js js/main.js -o dist/bundle.min.js",
+    "build:css": "cleancss -o dist/style.min.css css/style.css --format beautify",
+    "build": "npm run build:css && npm run build:js",
+    "open:chrome": "start chrome \"%CD%\\index.html\" --new-window",
+    "dev": "npm run build && npm run open:chrome",
+    "clean": "rd /s /q dist && mkdir dist"
+  },
+  "devDependencies": {
+    "clean-css-cli": "^5.6.3",
+    "terser": "^5.31.0"
+  }
+}

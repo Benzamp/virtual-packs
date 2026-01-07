@@ -320,3 +320,8 @@ input:focus {
   opacity: 0;
   transition: opacity .3s ease
 }
+#reset-view-btn:hover {
+  background: #ef4444!important;
+  color: #fff!important;
+  box-shadow: 0 0 15px rgba(239,68,68,.5)
+}

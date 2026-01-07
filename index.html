@@ -155,11 +155,11 @@
                     <label style="font-size: 0.6rem; color: #64748b;">Card back Image</label>
                     <input type="file" id="imgBack" accept="image/*" onchange="window.CardApp.updateCard()">
 
-                    <label style="font-size: 0.6rem; color: #64748b;">Virtual Packs (VSC) Logo</label>
-                    <input type="file" id="vpLogo" accept="image/*" onchange="window.CardApp.updateCard()">
+                    <label style="font-size: 0.6rem; color: #64748b;">Logo 1</label>
+                    <input type="file" id="logo1" accept="image/*" onchange="window.CardApp.updateCard()">
 
-                    <label style="font-size: 0.6rem; color: #64748b;">League Logo</label>
-                    <input type="file" id="lLogo" accept="image/*" onchange="window.CardApp.updateCard()">
+                    <label style="font-size: 0.6rem; color: #64748b;">Logo 2</label>
+                    <input type="file" id="logo2" accept="image/*" onchange="window.CardApp.updateCard()">
                 </div>
 
                 <div class="section">
@@ -190,14 +190,22 @@
                     <textarea id="quote" placeholder="Career Highlights..." rows="3">A standout strong safety known for his punishing hits and exceptional field vision. A cornerstone of the Riverhogs defense.</textarea>
                 </div>
 
-                <!-- TODO
                 <div class="section">
-                    <button class="btn btn-primary" onclick="window.CardApp.updateCard()">Update Preview</button>
                     <button class="btn btn-flip" onclick="window.CardApp.flipCard()">Flip Card</button>
                 </div>
-                -->
+
             </div>
-            <div id="viewport"></div>
+            <div id="viewport">
+                <button id="reset-view-btn" class="hidden" 
+                        style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); 
+                            z-index: 10; background: rgba(15, 23, 42, 0.8); border: 1px solid #ef4444; 
+                            color: #ef4444; padding: 10px 20px; border-radius: 20px; cursor: pointer; 
+                            font-weight: bold; backdrop-filter: blur(5px); font-size: 0.8rem;
+                            transition: all 0.2s;"
+                        onclick="window.CardApp.resetView()">
+                    RESET VIEW ↺
+                </button>
+            </div>
         </div>
     </div>
 

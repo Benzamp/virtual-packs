@@ -103,8 +103,8 @@ window.CardApp = {
         layerPlayer: null, 
         layerBorder: null, 
         back: null,
-        vpLogo: null,
-        lLogo: null
+        logo1: null,
+        logo2: null
     },
     flakeOptions: [
         'broken-glass.jpg', 
@@ -120,6 +120,9 @@ window.CardApp = {
         'retro.jpg',
         'stained-glass.jpg'
     ],
+    rotationVelocity: { x: 0, y: 0 },
+    friction: 0.95,
+    isDragging: false,
 
     init() {
         const viewport = document.getElementById('viewport');
@@ -226,6 +229,14 @@ window.CardApp = {
     updateCard(vaultData = null) {
         if (!window.CardApp || !window.CardRenderer) return;
         const data = vaultData || window.UIHandler.getFormData();
+
+        // Keep rotation while editing card 
+        let currentRotation = { x: 0, y: 0, z: 0 };
+        if (this.cardMesh) {
+            currentRotation.x = this.cardMesh.rotation.x;
+            currentRotation.y = this.cardMesh.rotation.y;
+            currentRotation.z = this.cardMesh.rotation.z;
+        }
         
         window.CardRenderer.renderFront(data, this.userImages);
         window.CardRenderer.renderBack(data, this.userImages);
@@ -319,6 +330,9 @@ window.CardApp = {
             new THREE.BoxGeometry(3.5, 5, 0.1), 
             [sideMat, sideMat, sideMat, sideMat, frontMat, backMat]
         );
+
+        this.cardMesh.rotation.set(currentRotation.x, currentRotation.y, currentRotation.z);
+
         this.scene.add(this.cardMesh);
 
         // 2. Player Overlay
@@ -334,51 +348,187 @@ window.CardApp = {
         this.cardMesh.add(bMesh);
 
         // 4. Back Logo Overlays (Ordered Logos)
-        const vpLogoMesh = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 5), getMaterial(texVP, data.isFoil, true));
-        vpLogoMesh.position.z = -0.051; 
-        vpLogoMesh.rotation.y = Math.PI;
-        this.cardMesh.add(vpLogoMesh);
+        const logo1Mesh = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 5), getMaterial(texVP, data.isFoil, true));
+        logo1Mesh.position.z = -0.051; 
+        logo1Mesh.rotation.y = Math.PI;
+        this.cardMesh.add(logo1Mesh);
 
-        const lLogoMesh = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 5), getMaterial(texLL, data.isFoil, true));
-        lLogoMesh.position.z = -0.052; 
-        lLogoMesh.rotation.y = Math.PI;
-        this.cardMesh.add(lLogoMesh);
+        const logo2Mesh = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 5), getMaterial(texLL, data.isFoil, true));
+        logo2Mesh.position.z = -0.052; 
+        logo2Mesh.rotation.y = Math.PI;
+        this.cardMesh.add(logo2Mesh);
     },
 
     animate() {
         requestAnimationFrame(() => this.animate());
         
-        const camPos = this.camera.position;
-
         if (this.cardMesh) {
-            if (this.cardMesh.material[4].type === 'ShaderMaterial') {
-                this.cardMesh.material[4].uniforms.uCameraPos.value.copy(camPos);
+            // 1. MOMENTUM LOGIC: Apply spin if not dragging
+            if (!this.isDragging) {
+                // Apply current velocity to rotation
+                this.cardMesh.rotation.x += this.rotationVelocity.x;
+                this.cardMesh.rotation.y += this.rotationVelocity.y;
+
+                // Decay the velocity over time (Friction)
+                // this.friction is typically 0.95 to 0.98
+                this.rotationVelocity.x *= this.friction;
+                this.rotationVelocity.y *= this.friction;
+
+                // Stop tiny movements to save performance
+                if (Math.abs(this.rotationVelocity.x) < 0.0001) this.rotationVelocity.x = 0;
+                if (Math.abs(this.rotationVelocity.y) < 0.0001) this.rotationVelocity.y = 0;
             }
-            
-            this.cardMesh.children.forEach(child => {
-                if (child.material && child.material.type === 'ShaderMaterial') {
-                    child.material.uniforms.uCameraPos.value.copy(camPos);
+
+            // 2. SHADER SYNC: Keep holographic highlights moving with view
+            if (this.camera) {
+                const camPos = this.camera.position;
+
+                // Sync main card face shader
+                if (this.cardMesh.material[4]?.type === 'ShaderMaterial') {
+                    this.cardMesh.material[4].uniforms.uCameraPos.value.copy(camPos);
                 }
-            });
+                
+                // Sync all overlay materials (Player, Border, etc.)
+                this.cardMesh.children.forEach(child => {
+                    if (child.material && child.material.type === 'ShaderMaterial') {
+                        child.material.uniforms.uCameraPos.value.copy(camPos);
+                    }
+                });
+
+                // 3. UI LOGIC: Toggle Reset View Button visibility
+                const resetBtn = document.getElementById('reset-view-btn');
+                if (resetBtn) {
+                    // Check for rotation (ignoring tiny fractional decimals)
+                    const isRotated = Math.abs(this.cardMesh.rotation.x) > 0.01 || 
+                                    Math.abs(this.cardMesh.rotation.y) > 0.01;
+                    // Check for zoom (default Z is 12)
+                    const isZoomed = Math.abs(this.camera.position.z - 12) > 0.1;
+                    // Check for pan (default X, Y are 0)
+                    const isPanned = Math.abs(this.camera.position.x) > 0.1 || 
+                                    Math.abs(this.camera.position.y) > 0.1;
+
+                    if (isRotated || isZoomed || isPanned) {
+                        resetBtn.classList.remove('hidden');
+                    } else {
+                        resetBtn.classList.add('hidden');
+                    }
+                }
+            }
         }
         
+        // 4. RENDER FRAME
         this.renderer.render(this.scene, this.camera);
     },
 
-    setupInteraction() {
-        let drag = false, prev = {x:0, y:0};
-        window.addEventListener('mousedown', (e) => { 
-            if (e.target.closest('#viewport')) {
-                drag = true; prev = {x:e.clientX, y:e.clientY}; 
+    flipCard() {
+        if (!this.cardMesh) return;
+        this.isFlipped = !this.isFlipped;
+        const targetY = this.isFlipped ? Math.PI : 0;
+        
+        gsap.to(this.cardMesh.rotation, {
+            y: targetY,
+            duration: 0.6,
+            ease: "back.out(1.2)"
+        });
+    },
+
+    resetView() {
+        if (!this.cardMesh || !this.camera) return;
+        
+        // Smoothly reset everything
+        gsap.to(this.cardMesh.rotation, { x: 0, y: 0, z: 0, duration: 0.8, ease: "power2.out" });
+        gsap.to(this.camera.position, { 
+            x: 0, 
+            y: 0, 
+            z: 12, 
+            duration: 0.8, 
+            ease: "power2.out",
+            onComplete: () => {
+                // Force hide the button just in case the animation loop hasn't caught it
+                document.getElementById('reset-view-btn')?.classList.add('hidden');
             }
         });
-        window.addEventListener('mouseup', () => drag = false);
-        window.addEventListener('mousemove', e => {
-            if (!drag || !this.cardMesh) return;
-            this.cardMesh.rotation.y += (e.clientX - prev.x) * 0.01;
-            this.cardMesh.rotation.x += (e.clientY - prev.y) * 0.01;
-            prev = {x:e.clientX, y:e.clientY};
+        this.isFlipped = false;
+    },
+
+
+    setupInteraction() {
+        let prev = { x: 0, y: 0 };
+        let pan = false;
+
+        // 1. Prevent context menu for right-click panning
+        window.addEventListener('contextmenu', (e) => {
+            if (e.target.closest('#viewport')) e.preventDefault();
         });
+
+        // 2. Mousedown: Unified Left (Rotate) and Right (Pan) detection
+        window.addEventListener('mousedown', (e) => {
+            if (e.target.closest('#viewport')) {
+                if (e.button === 0) { // Left Click
+                    this.isDragging = true;
+                    this.rotationVelocity = { x: 0, y: 0 }; // Kill momentum while grabbing
+                }
+                if (e.button === 2) { // Right Click
+                    pan = true;
+                }
+                prev = { x: e.clientX, y: e.clientY };
+            }
+        });
+
+        // 3. Mouseup: Clear all states
+        window.addEventListener('mouseup', () => {
+            this.isDragging = false;
+            pan = false;
+        });
+
+        // 4. Mousemove: Handle Rotation OR Panning
+        window.addEventListener('mousemove', (e) => {
+            if (!this.cardMesh) return;
+            
+            const deltaX = e.clientX - prev.x;
+            const deltaY = e.clientY - prev.y;
+
+            if (this.isDragging) {
+                // MOMENTUM ROTATION: Direct update (no GSAP here to avoid lag)
+                this.rotationVelocity.y = deltaX * 0.015;
+                this.rotationVelocity.x = deltaY * 0.015;
+
+                this.cardMesh.rotation.y += this.rotationVelocity.y;
+                this.cardMesh.rotation.x += this.rotationVelocity.x;
+
+            } else if (pan) {
+                // PANNING: Smoothly move camera
+                gsap.to(this.camera.position, {
+                    x: this.camera.position.x - (deltaX * 0.01),
+                    y: this.camera.position.y + (deltaY * 0.01),
+                    duration: 0.5,
+                    ease: "power2.out"
+                });
+            }
+
+            prev = { x: e.clientX, y: e.clientY };
+        });
+
+        // 5. Wheel: Fast and Smooth Zoom
+        window.addEventListener('wheel', (e) => {
+            if (e.target.closest('#viewport')) {
+                e.preventDefault();
+
+                const speedMultiplier = 1.5; 
+                const delta = e.deltaY * speedMultiplier;
+                let targetZ = this.camera.position.z + (delta * 0.005);
+                
+                // Keep zoom within card bounds
+                targetZ = Math.min(Math.max(targetZ, 5), 18);
+
+                gsap.to(this.camera.position, {
+                    z: targetZ,
+                    duration: 0.4,
+                    ease: "power2.out",
+                    overwrite: "auto"
+                });
+            }
+        }, { passive: false });
     }
 };
 

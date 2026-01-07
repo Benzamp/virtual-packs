@@ -107,26 +107,33 @@ window.CardRenderer = {
         const plateX = (w - plateWidth) / 2;
 
         // --- 2. LOGOS (Drawn after Background, before Text) ---
-        const logoSize = 135;
-        const logoY = 425;
+        const logoSize = 100;
+        const logoY = 455;
 
         // Virtual Packs Logo
-        if (userImages.vpLogo) {
+        if (userImages.logo1) {
             const logoX = (w - logoSize) / 2 - 300;
             // Draw to main back for 2D visibility
-            ctx.drawImage(userImages.vpLogo, logoX, logoY, logoSize, logoSize);
+            ctx.drawImage(userImages.logo1, logoX, logoY, logoSize, logoSize);
             // Draw to dedicated foil canvas if it exists
-            if (vpCtx) vpCtx.drawImage(userImages.vpLogo, logoX, logoY, logoSize, logoSize);
+            if (vpCtx) vpCtx.drawImage(userImages.logo1, logoX, logoY, logoSize, logoSize);
         }
 
         // League Logo
-        if (userImages.lLogo) {
+        if (userImages.logo2) {
             const logoX = (w - logoSize) / 2 + 300;
             // Draw to main back for 2D visibility
-            ctx.drawImage(userImages.lLogo, logoX, logoY, logoSize, logoSize);
+            ctx.drawImage(userImages.logo2, logoX, logoY, logoSize, logoSize);
             // Draw to dedicated foil canvas if it exists
-            if (lCtx) lCtx.drawImage(userImages.lLogo, logoX, logoY, logoSize, logoSize);
+            if (lCtx) lCtx.drawImage(userImages.logo2, logoX, logoY, logoSize, logoSize);
         }
+
+        // --- Card # TEXT ---
+        const cardNum = data.cardNum || "1/100";
+        ctx.fillStyle = '#1e293b';
+        ctx.font = 'bold 40px "Bebas Neue", "Impact", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(cardNum, w / 2, 115);
 
         // --- 3. POSITION TEXT ---
         const position = data.pPosition || "SS";
@@ -156,10 +163,10 @@ window.CardRenderer = {
         // --- 5. HIGHLIGHTS SECTION ---
         const highlightY = 750; 
         ctx.fillStyle = '#111'; 
-        ctx.font = `bold 36px Arial`; 
+        ctx.font = `bold 44px Arial`; 
         ctx.fillText("HIGHLIGHTS", w / 2, highlightY);
         
-        ctx.font = `italic 32px Georgia`; 
+        ctx.font = `italic 40px Georgia`; 
         this.wrapText(ctx, data.quote || "NO HIGHLIGHTS PROVIDED", w / 2, highlightY + 55, plateWidth - 40, 42);
 
         // --- 6. ATTRIBUTES SECTION ---
@@ -167,7 +174,7 @@ window.CardRenderer = {
         const statsHeight = 400; 
 
         ctx.fillStyle = '#111'; 
-        ctx.font = 'bold 32px Arial';
+        ctx.font = 'bold 44px Arial';
         ctx.fillText("SEASON 26 ATTRIBUTES", w / 2, statsY + 50); 
 
         const statList = [

@@ -80,10 +80,10 @@ window.UIHandler = {
         this.bindFileUpload('imgBack', 'back');
 
         // Bind Virtual Packs Logo
-        this.bindFileUpload('vpLogo', 'vpLogo');
+        this.bindFileUpload('logo1', 'logo1');
 
         // Bind League Logo
-        this.bindFileUpload('lLogo', 'lLogo');
+        this.bindFileUpload('logo2', 'logo2');
         
         ['input', 'change'].forEach(eventType => {
             document.addEventListener(eventType, (e) => {
@@ -108,7 +108,7 @@ window.UIHandler = {
             reader.onload = ev => {
                 const img = new Image();
                 img.onload = () => {
-                    // This ensures we are only updating ONE key (e.g., 'vpLogo') 
+                    // This ensures we are only updating ONE key (e.g., 'logo1') 
                     // and not wiping out the others (e.g., 'back')
                     window.CardApp.userImages[key] = img; 
                     console.log(`Uploaded ${key}:`, window.CardApp.userImages);

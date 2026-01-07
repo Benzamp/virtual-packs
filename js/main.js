@@ -106,7 +106,12 @@ window.CardApp = {
         'oil.jpg', 
         'shards.jpg',
         'fire.jpg',
-        'foil1.jpg'
+        'foil1.jpg',
+        'checkered.jpg',
+        'geometric.jpg',
+        'geometric2.jpg',
+        'retro.jpg',
+        'stained-glass.jpg'
     ],
 
     init() {
@@ -230,9 +235,26 @@ window.CardApp = {
         const texP = new THREE.CanvasTexture(document.getElementById('hidden-canvas-player'));
         const texBorder = new THREE.CanvasTexture(document.getElementById('hidden-canvas-border'));
 
-        [texF, texB, texP, texBorder].forEach(t => t.needsUpdate = true);
+        const maxAnisotropy = this.renderer.capabilities.getMaxAnisotropy();
+        [texF, texB, texP, texBorder].forEach(t => {
+            t.flipY = true;
+            t.anisotropy = maxAnisotropy;
+            t.needsUpdate = true;
+        });
 
-        if (this.cardMesh) this.scene.remove(this.cardMesh);
+        if (this.cardMesh) {
+            this.cardMesh.traverse((child) => {
+                if (child.isMesh) {
+                    child.geometry.dispose();
+                    if (Array.isArray(child.material)) {
+                        child.material.forEach(m => m.dispose());
+                    } else {
+                        child.material.dispose();
+                    }
+                }
+            });
+            this.scene.remove(this.cardMesh);
+        }
 
         const sideMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
         

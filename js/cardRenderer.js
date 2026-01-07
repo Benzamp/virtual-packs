@@ -82,29 +82,21 @@ window.CardRenderer = {
         const pad = 60;
         
         ctx.clearRect(0, 0, w, h);
-        
-        // 2. LAYER 2: Back Image 2 (Action Inset)
-        const img2W = 850; 
-        const img2H = 500; 
-        const img2X = (w - img2W) / 2;
-        const img2Y = 150; 
 
-        if (userImages.back2) {
-            ctx.drawImage(userImages.back2, img2X, img2Y, img2W, img2H);
+        if (userImages.back) {
+            ctx.drawImage(userImages.back, 0, 0, w, h);
+            console.log('image found');
         } else {
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-            ctx.fillRect(img2X, img2Y, img2W, img2H);
+            console.log('no image found');
         }
 
         const plateWidth = w - (pad * 2.5);
         const plateX = (w - plateWidth) / 2;
+
+        ctx.fillText("32", w / 2, highlightY + 50);
         
         // 3. LAYER 3: Highlights Section
         const highlightY = 700; 
-        const highlightHeight = 180;
-
-        ctx.fillStyle = 'rgba(211, 211, 211, 0.9)';
-        ctx.fillRect(plateX, highlightY, plateWidth, highlightHeight);
         
         ctx.textAlign = 'center';
         ctx.fillStyle = '#111'; 
@@ -115,11 +107,8 @@ window.CardRenderer = {
         this.wrapText(ctx, data.quote || "NO HIGHLIGHTS PROVIDED", w / 2, highlightY + 105, plateWidth - 40, 40);
 
         // 4. LAYER 4: Attributes Section
-        const statsY = h * 0.72;
-        const statsHeight = 300; 
-
-        ctx.fillStyle = 'rgba(211, 211, 211, 0.9)';
-        ctx.fillRect(plateX, statsY, plateWidth, statsHeight + 20);
+        const statsY = 975;
+        const statsHeight = 400; 
 
         ctx.fillStyle = '#111'; 
         ctx.font = 'bold 32px Arial';

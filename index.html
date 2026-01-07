@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VSC Terminal | Card Manager</title>
     <link rel="stylesheet" href="dist/style.min.css">
-
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Jersey+25&display=swap" rel="stylesheet">
 </head>
 <body>
 
@@ -45,6 +47,28 @@
                     <input type="text" id="fName" placeholder="First Name" value="AMONTE">
                     <input type="text" id="lName" placeholder="Last Name" value="DUBOIS-SMITH">
                     <input type="text" id="team" placeholder="Team Name" value="RIVERHOGS">
+
+                    <div class="team-color-section section">
+                        <label class="section-title">Team Colors</label>
+                        <div class="color-picker-group">
+                                <input type="color" id="color1" class="color-input" value="#ff4444">
+                                <span class="color-hex" id="hex1">#ff4444</span>
+
+                                <input type="color" id="color2" class="color-input" value="#44ff44">
+                                <span class="color-hex" id="hex2">#44ff44</span>
+
+                                <input type="color" id="color3" class="color-input" value="#4444ff">
+                                <span class="color-hex" id="hex3">#4444ff</span>
+
+                                <div class="color-buttons">
+                                    <button id="confirmColors" class="btn btn-primary">Confirm</button>
+                                    <button id="cancelColors" class="btn btn-flip">Cancel</button>
+                                </div>
+                        </div>
+                        
+                        <div id="colorFeedback" class="color-feedback"></div>
+                    </div>
+
                     <div class="grid-controls">
                         <div>
                             <label style="font-size: 0.6rem; color: #64748b;">Number</label>
@@ -74,18 +98,18 @@
 
                     <label style="margin-top: 10px; font-size: 0.6rem; color: #64748b;">Foil Pattern</label>
                     <select id="flakeType" onchange="window.CardApp.changeFlakeTexture(this.value)">
-                        <option value="assets/broken-glass.jpg">BROKEN GLASS</option>
-                        <option value="assets/flakes.jpg">FLAKE</option>
-                        <option value="assets/gold.jpg">GOLD DUST</option>
-                        <option value="assets/oil.jpg">OIL SLICK</option>
-                        <option value="assets/shards.jpg">SHARDS</option>
-                        <option value="assets/fire.jpg">FIRE</option>
-                        <option value="assets/foil1.jpg">CLASSIC FOIL</option>
-                        <option value="assets/checkered.jpg">CHECKERED</option>
-                        <option value="assets/geometric.jpg">GEOMETRIC</option>
-                        <option value="assets/geometric2.jpg">GEOMETRIC2</option>
-                        <option value="assets/retro.jpg">RETRO</option>
-                        <option value="assets/stained-glass.jpg">STAINED GLASS</option>
+                        <option value="assets/foil-textures/broken-glass.jpg">BROKEN GLASS</option>
+                        <option value="assets/foil-textures/flakes.jpg">FLAKE</option>
+                        <option value="assets/foil-textures/gold.jpg">GOLD DUST</option>
+                        <option value="assets/foil-textures/oil.jpg">OIL SLICK</option>
+                        <option value="assets/foil-textures/shards.jpg">SHARDS</option>
+                        <option value="assets/foil-textures/fire.jpg">FIRE</option>
+                        <option value="assets/foil-textures/foil1.jpg">CLASSIC FOIL</option>
+                        <option value="assets/foil-textures/checkered.jpg">CHECKERED</option>
+                        <option value="assets/foil-textures/geometric.jpg">GEOMETRIC</option>
+                        <option value="assets/foil-textures/geometric2.jpg">GEOMETRIC2</option>
+                        <option value="assets/foil-textures/retro.jpg">RETRO</option>
+                        <option value="assets/foil-textures/stained-glass.jpg">STAINED GLASS</option>
                     </select>
                     
                     <div style="margin-top: 10px; display: grid; grid-template-columns: 1fr; gap: 5px;">
@@ -130,6 +154,12 @@
                     <label>Card back</label>
                     <label style="font-size: 0.6rem; color: #64748b;">Card back Image</label>
                     <input type="file" id="imgBack" accept="image/*" onchange="window.CardApp.updateCard()">
+
+                    <label style="font-size: 0.6rem; color: #64748b;">Virtual Packs (VSC) Logo</label>
+                    <input type="file" id="vpLogo" accept="image/*" onchange="window.CardApp.updateCard()">
+
+                    <label style="font-size: 0.6rem; color: #64748b;">League Logo</label>
+                    <input type="file" id="lLogo" accept="image/*" onchange="window.CardApp.updateCard()">
                 </div>
 
                 <div class="section">
@@ -200,6 +230,8 @@
     <canvas id="hidden-canvas-mask" width="1024" height="1480" style="display:none;"></canvas>
     <canvas id="hidden-canvas-player" width="1024" height="1480" style="display:none;"></canvas>
     <canvas id="hidden-canvas-border" width="1024" height="1480" style="display:none;"></canvas>
+    <canvas id="hidden-canvas-vp" width="1024" height="1480" style="display:none;"></canvas>
+    <canvas id="hidden-canvas-league" width="1024" height="1480" style="display:none;"></canvas>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>

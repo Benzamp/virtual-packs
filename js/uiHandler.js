@@ -78,6 +78,12 @@ window.UIHandler = {
         
         // Bind Back Image
         this.bindFileUpload('imgBack', 'back');
+
+        // Bind Virtual Packs Logo
+        this.bindFileUpload('vpLogo', 'vpLogo');
+
+        // Bind League Logo
+        this.bindFileUpload('lLogo', 'lLogo');
         
         ['input', 'change'].forEach(eventType => {
             document.addEventListener(eventType, (e) => {
@@ -102,7 +108,10 @@ window.UIHandler = {
             reader.onload = ev => {
                 const img = new Image();
                 img.onload = () => {
-                    window.CardApp.userImages[key] = img;
+                    // This ensures we are only updating ONE key (e.g., 'vpLogo') 
+                    // and not wiping out the others (e.g., 'back')
+                    window.CardApp.userImages[key] = img; 
+                    console.log(`Uploaded ${key}:`, window.CardApp.userImages);
                     window.CardApp.updateCard();
                 };
                 img.src = ev.target.result;
@@ -141,6 +150,8 @@ window.UIHandler = {
             fName: getVal('fName'),
             fNameColor: getVal('fNameColor'),
             fNameFont: getVal('fNameFont'),
+            pNumber: getVal('pNumber'),
+            pPosition: getVal('pPosition'),
             
             lName: getVal('lName'),
             lNameColor: getVal('lNameColor'),
@@ -155,10 +166,9 @@ window.UIHandler = {
             themeColor: getVal('themeColor'),
             isFoil: getChecked('isFoil'),
 
-            holoBg: document.getElementById('holoBg').checked,
-            holoPlayer: document.getElementById('holoPlayer').checked,
-            holoBorder: document.getElementById('holoBorder').checked,
-
+            holoBg: document.getElementById('holoBg')?.checked || false,
+            holoPlayer: document.getElementById('holoPlayer')?.checked || false,
+            holoBorder: document.getElementById('holoBorder')?.checked || false,
 
             // Back Side Customization
             backColor: getVal('backColor'),

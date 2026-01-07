@@ -42,6 +42,9 @@ window.CardRenderer = {
     },
 
     renderFront(data, userImages) {
+        // Get team colors
+        const teamColors = window.TeamColors ? window.TeamColors.getColors() : null;
+
         const canvas = document.getElementById('hidden-canvas-front');
         const playerCanvas = document.getElementById('hidden-canvas-player');
         const borderCanvas = document.getElementById('hidden-canvas-border');
@@ -70,43 +73,96 @@ window.CardRenderer = {
         if (userImages.layerBorder) {
             bCtx.drawImage(userImages.layerBorder, 0, 0, w, h);
         }
-
-        // Render Text onto background
-        //this.renderFrontText(ctx, data, w, h);
     },
 
     renderBack(data, userImages) {
+        // Get team colors
+        const teamColors = window.TeamColors ? window.TeamColors.getColors() : null;
+
         const canvas = document.getElementById('hidden-canvas-back');
+        const vpCanvas = document.getElementById('hidden-canvas-vp'); 
+        const lCanvas = document.getElementById('hidden-canvas-league');
+
         const ctx = canvas.getContext('2d');
+        const vpCtx = vpCanvas ? vpCanvas.getContext('2d') : null;
+        const lCtx = lCanvas ? lCanvas.getContext('2d') : null;
+        
         const w = 1024, h = 1480;
         const pad = 60;
         
+        // Clear all relevant canvases
         ctx.clearRect(0, 0, w, h);
+        if (vpCtx) vpCtx.clearRect(0, 0, w, h);
+        if (lCtx) lCtx.clearRect(0, 0, w, h);
 
+        // --- 1. BASE BACKGROUND ---
         if (userImages.back) {
             ctx.drawImage(userImages.back, 0, 0, w, h);
-            console.log('image found');
         } else {
-            console.log('no image found');
+            ctx.fillStyle = "#f8fafc"; // Default light background
+            ctx.fillRect(0, 0, w, h);
         }
 
         const plateWidth = w - (pad * 2.5);
         const plateX = (w - plateWidth) / 2;
 
-        ctx.fillText("32", w / 2, highlightY + 50);
-        
-        // 3. LAYER 3: Highlights Section
-        const highlightY = 700; 
-        
+        // --- 2. LOGOS (Drawn after Background, before Text) ---
+        const logoSize = 135;
+        const logoY = 425;
+
+        // Virtual Packs Logo
+        if (userImages.vpLogo) {
+            const logoX = (w - logoSize) / 2 - 300;
+            // Draw to main back for 2D visibility
+            ctx.drawImage(userImages.vpLogo, logoX, logoY, logoSize, logoSize);
+            // Draw to dedicated foil canvas if it exists
+            if (vpCtx) vpCtx.drawImage(userImages.vpLogo, logoX, logoY, logoSize, logoSize);
+        }
+
+        // League Logo
+        if (userImages.lLogo) {
+            const logoX = (w - logoSize) / 2 + 300;
+            // Draw to main back for 2D visibility
+            ctx.drawImage(userImages.lLogo, logoX, logoY, logoSize, logoSize);
+            // Draw to dedicated foil canvas if it exists
+            if (lCtx) lCtx.drawImage(userImages.lLogo, logoX, logoY, logoSize, logoSize);
+        }
+
+        // --- 3. POSITION TEXT ---
+        const position = data.pPosition || "SS";
+        ctx.fillStyle = '#1e293b';
+        ctx.font = 'bold 48px "Bebas Neue", "Impact", sans-serif';
         ctx.textAlign = 'center';
+        ctx.fillText(position, w / 2, 340);
+
+        // --- 4. PLAYER NUMBER (Stylized) ---
+        const number = data.pNumber || "00";
+        const centerX = w / 2;
+        const centerY = 590;
+
+        ctx.font = '900 240px "Bebas Neue", "Impact", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.lineJoin = 'round';
+
+        // Outer border (Stroke)
+        ctx.strokeStyle = teamColors ? teamColors.color2 : '#64748b';
+        ctx.lineWidth = 15;
+        ctx.strokeText(number, centerX, centerY);
+
+        // Main number (Fill)
+        ctx.fillStyle = teamColors ? teamColors.color1 : '#1e293b';
+        ctx.fillText(number, centerX, centerY);
+
+        // --- 5. HIGHLIGHTS SECTION ---
+        const highlightY = 750; 
         ctx.fillStyle = '#111'; 
         ctx.font = `bold 36px Arial`; 
-        ctx.fillText("HIGHLIGHTS", w / 2, highlightY + 50);
+        ctx.fillText("HIGHLIGHTS", w / 2, highlightY);
         
         ctx.font = `italic 32px Georgia`; 
-        this.wrapText(ctx, data.quote || "NO HIGHLIGHTS PROVIDED", w / 2, highlightY + 105, plateWidth - 40, 40);
+        this.wrapText(ctx, data.quote || "NO HIGHLIGHTS PROVIDED", w / 2, highlightY + 55, plateWidth - 40, 42);
 
-        // 4. LAYER 4: Attributes Section
+        // --- 6. ATTRIBUTES SECTION ---
         const statsY = 975;
         const statsHeight = 400; 
 

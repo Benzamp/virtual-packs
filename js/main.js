@@ -98,7 +98,14 @@ window.CardApp = {
     envMap: null,
     flakeMap: null,
     isFlipped: false,
-    userImages: { front: null, back: null },
+    userImages: { 
+        layerBg: null, 
+        layerPlayer: null, 
+        layerBorder: null, 
+        back: null,
+        vpLogo: null,
+        lLogo: null
+    },
     flakeOptions: [
         'broken-glass.jpg', 
         'flakes.jpg', 
@@ -134,34 +141,28 @@ window.CardApp = {
         loader.setCrossOrigin('anonymous');
 
         // Load Default Environment
-        this.envMap = loader.load('assets/room-envmap.jpg', (tex) => {
+        this.envMap = loader.load('assets/environment-maps/room-envmap.jpg', (tex) => {
             tex.mapping = THREE.EquirectangularReflectionMapping;
             this.updateCard();
         });
 
-        this.flakeMap = loader.load('assets/broken-glass.jpg', (tex) => {
+        this.flakeMap = loader.load('assets/foil-textures/broken-glass.jpg', (tex) => {
             const imageRatio = tex.image.width / tex.image.height;
 
-            // 1. Check if the image needs rotation to fit the vertical card better
             if (imageRatio > 1.0) {
                 tex.rotation = Math.PI / 2; 
                 tex.center.set(0.5, 0.5); 
             }
 
-            // 2. Set wrapping and repeat
             tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-            
-            // 3. Update the card now that the texture is ready
             this.updateCard();
         });
-
-        this.flakeMap.wrapS = this.flakeMap.wrapT = THREE.RepeatWrapping;
 
         const ambient = new THREE.AmbientLight(0xffffff, 0.8);
         this.scene.add(ambient);
 
         const pointLight = new THREE.PointLight(0xffffff, 0.8);
-        pointLight.position.set(5, 5, 10); // Positioned to hit the card face
+        pointLight.position.set(5, 5, 10);
         this.scene.add(pointLight);
 
         this.createFlakeDropdown();
@@ -172,7 +173,6 @@ window.CardApp = {
     },
 
     createFlakeDropdown() {
-        // Looks for a div with ID 'ui-controls' in your HTML
         const container = document.getElementById('ui-controls'); 
         if (!container) return;
 
@@ -194,7 +194,7 @@ window.CardApp = {
         
         this.flakeOptions.forEach(fileName => {
             const option = document.createElement('option');
-            option.value = `assets/${fileName}`;
+            option.value = `assets/foil-textures/${fileName}`;
             option.innerText = fileName.replace('.jpg', '').toUpperCase();
             select.appendChild(option);
         });
@@ -210,8 +210,8 @@ window.CardApp = {
         const loader = new THREE.TextureLoader();
         loader.load(path, (tex) => {
             tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-            this.flakeMap = tex; // Update the global map
-            this.updateCard();   // Re-render the 3D card
+            this.flakeMap = tex;
+            this.updateCard();
         });
     },
 
@@ -230,13 +230,24 @@ window.CardApp = {
         window.CardRenderer.renderFront(data, this.userImages);
         window.CardRenderer.renderBack(data, this.userImages);
 
-        const texF = new THREE.CanvasTexture(document.getElementById('hidden-canvas-front'));
-        const texB = new THREE.CanvasTexture(document.getElementById('hidden-canvas-back'));
-        const texP = new THREE.CanvasTexture(document.getElementById('hidden-canvas-player'));
-        const texBorder = new THREE.CanvasTexture(document.getElementById('hidden-canvas-border'));
+        const getCanvasTex = (id) => {
+            const el = document.getElementById(id);
+            if (!el) return null; // Prevents crash if element is null
+            const tex = new THREE.CanvasTexture(el);
+            tex.flipY = true;
+            tex.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+            return tex;
+        };
+
+        const texF = getCanvasTex('hidden-canvas-front');
+        const texB = getCanvasTex('hidden-canvas-back');
+        const texP = getCanvasTex('hidden-canvas-player');
+        const texBorder = getCanvasTex('hidden-canvas-border');
+        const texVP = getCanvasTex('hidden-canvas-vp');
+        const texLL = getCanvasTex('hidden-canvas-league');
 
         const maxAnisotropy = this.renderer.capabilities.getMaxAnisotropy();
-        [texF, texB, texP, texBorder].forEach(t => {
+        [texF, texB, texP, texBorder, texVP, texLL].forEach(t => {
             t.flipY = true;
             t.anisotropy = maxAnisotropy;
             t.needsUpdate = true;
@@ -258,7 +269,6 @@ window.CardApp = {
 
         const sideMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
         
-        // BACK MATERIAL: Always uses environment map for subtle depth
         const backMat = new THREE.MeshStandardMaterial({ 
             map: texB, 
             envMap: this.envMap,
@@ -267,13 +277,7 @@ window.CardApp = {
             envMapIntensity: 0.5 
         });
 
-        /**
-         * Helper: Material Switcher
-         * Now applies environment mapping to both Shader and Standard materials
-         */
         const getMaterial = (tex, isHoloEnabled, isTransparent = false) => {
-            // Determine if this specific layer should be holographic
-            // Logic: If the user checked the specific layer holo OR if the master foil is on
             const shouldShowHolo = isHoloEnabled || data.isFoil || data.rarityTier === 'Legendary';
             
             if (shouldShowHolo) {
@@ -298,7 +302,6 @@ window.CardApp = {
                 });
             }
 
-            // Default Matte Material
             return new THREE.MeshStandardMaterial({ 
                 map: tex, 
                 envMap: this.envMap,
@@ -318,17 +321,28 @@ window.CardApp = {
         );
         this.scene.add(this.cardMesh);
 
-        // 2. Player
+        // 2. Player Overlay
         const pMat = getMaterial(texP, data.holoPlayer, true);
         const pMesh = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 5), pMat);
         pMesh.position.z = 0.051; 
         this.cardMesh.add(pMesh);
 
-        // 3. Border
+        // 3. Border Overlay
         const bMat = getMaterial(texBorder, data.holoBorder, true);
         const bMesh = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 5), bMat);
         bMesh.position.z = 0.052; 
         this.cardMesh.add(bMesh);
+
+        // 4. Back Logo Overlays (Ordered Logos)
+        const vpLogoMesh = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 5), getMaterial(texVP, data.isFoil, true));
+        vpLogoMesh.position.z = -0.051; 
+        vpLogoMesh.rotation.y = Math.PI;
+        this.cardMesh.add(vpLogoMesh);
+
+        const lLogoMesh = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 5), getMaterial(texLL, data.isFoil, true));
+        lLogoMesh.position.z = -0.052; 
+        lLogoMesh.rotation.y = Math.PI;
+        this.cardMesh.add(lLogoMesh);
     },
 
     animate() {
@@ -337,12 +351,10 @@ window.CardApp = {
         const camPos = this.camera.position;
 
         if (this.cardMesh) {
-            // Update Background (Box Side 4)
             if (this.cardMesh.material[4].type === 'ShaderMaterial') {
                 this.cardMesh.material[4].uniforms.uCameraPos.value.copy(camPos);
             }
             
-            // Update Overlays (Children of cardMesh)
             this.cardMesh.children.forEach(child => {
                 if (child.material && child.material.type === 'ShaderMaterial') {
                     child.material.uniforms.uCameraPos.value.copy(camPos);
@@ -371,3 +383,93 @@ window.CardApp = {
 };
 
 window.addEventListener('load', () => window.CardApp.init());
+
+window.TeamColors = {
+    colors: {
+        color1: '#ff4444',
+        color2: '#44ff44',
+        color3: '#4444ff'
+    },
+
+    init() {
+        this.loadColors();
+        this.setupColorPickers();
+        this.setupButtons();
+    },
+
+    loadColors() {
+        const saved = localStorage.getItem('teamColors');
+        if (saved) {
+            this.colors = JSON.parse(saved);
+            this.applyColors();
+        }
+    },
+
+    applyColors() {
+        document.getElementById('color1').value = this.colors.color1;
+        document.getElementById('color2').value = this.colors.color2;
+        document.getElementById('color3').value = this.colors.color3;
+        document.getElementById('hex1').textContent = this.colors.color1;
+        document.getElementById('hex2').textContent = this.colors.color2;
+        document.getElementById('hex3').textContent = this.colors.color3;
+    },
+
+    setupColorPickers() {
+        ['color1', 'color2', 'color3'].forEach((id, index) => {
+            const colorInput = document.getElementById(id);
+            const hexDisplay = document.getElementById(`hex${index + 1}`);
+            
+            colorInput.addEventListener('input', (e) => {
+                hexDisplay.textContent = e.target.value;
+            });
+        });
+    },
+
+    setupButtons() {
+        const confirmBtn = document.getElementById('confirmColors');
+        const cancelBtn = document.getElementById('cancelColors');
+        
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', () => {
+                this.colors.color1 = document.getElementById('color1').value;
+                this.colors.color2 = document.getElementById('color2').value;
+                this.colors.color3 = document.getElementById('color3').value;
+                
+                localStorage.setItem('teamColors', JSON.stringify(this.colors));
+                this.showFeedback('Colors saved!');
+                
+                if (window.CardApp) {
+                    window.CardApp.updateCard();
+                }
+            });
+        }
+
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+                this.applyColors();
+                this.showFeedback('Changes cancelled');
+            });
+        }
+    },
+
+    showFeedback(message) {
+        const feedback = document.getElementById('colorFeedback');
+        if (feedback) {
+            feedback.textContent = message;
+            feedback.style.opacity = '1';
+            setTimeout(() => {
+                feedback.style.opacity = '0';
+            }, 2000);
+        }
+    },
+
+    getColors() {
+        return this.colors;
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (document.getElementById('color1')) {
+        window.TeamColors.init();
+    }
+});

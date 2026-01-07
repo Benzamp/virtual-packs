@@ -119,7 +119,8 @@ window.CardApp = {
         'geometric.jpg',
         'geometric2.jpg',
         'retro.jpg',
-        'stained-glass.jpg'
+        'stained-glass.jpg',
+        'hogs-tiled.jpg'
     ],
     rotationVelocity: { x: 0, y: 0 },
     friction: 0.95,

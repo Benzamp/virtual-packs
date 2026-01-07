@@ -99,8 +99,21 @@ window.CardRenderer = {
         if (userImages.back) {
             ctx.drawImage(userImages.back, 0, 0, w, h);
         } else {
-            ctx.fillStyle = "#f8fafc"; // Default light background
+            ctx.fillStyle = "#f8fafc"; 
             ctx.fillRect(0, 0, w, h);
+        }
+
+        // --- TEAM LOGO WATERMARK ---
+        if (userImages.teamLogo) {
+            ctx.save();
+            ctx.globalAlpha = 0.25; // Set low transparency (adjust 0.0 to 1.0)
+            
+            const watermarkSize = 1000;
+            const wx = (w - watermarkSize) / 2;
+            const wy = (h - watermarkSize) / 2;
+
+            ctx.drawImage(userImages.teamLogo, wx, wy, watermarkSize, watermarkSize);
+            ctx.restore();
         }
 
         const plateWidth = w - (pad * 2.5);

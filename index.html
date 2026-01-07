@@ -160,6 +160,9 @@
 
                     <label style="font-size: 0.6rem; color: #64748b;">Logo 2</label>
                     <input type="file" id="logo2" accept="image/*" onchange="window.CardApp.updateCard()">
+
+                    <label style="font-size: 0.6rem; color: #64748b;">Team Logo</label>
+                    <input type="file" id="teamLogo" accept="image/*" onchange="window.CardApp.updateCard()">
                 </div>
 
                 <div class="section">
@@ -240,6 +243,7 @@
     <canvas id="hidden-canvas-border" width="1024" height="1480" style="display:none;"></canvas>
     <canvas id="hidden-canvas-vp" width="1024" height="1480" style="display:none;"></canvas>
     <canvas id="hidden-canvas-league" width="1024" height="1480" style="display:none;"></canvas>
+    <canvas id="hidden-canvas-team-logo" width="1024" height="1480" style="display:none;"></canvas>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>

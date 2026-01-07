@@ -79,11 +79,14 @@ window.UIHandler = {
         // Bind Back Image
         this.bindFileUpload('imgBack', 'back');
 
-        // Bind Virtual Packs Logo
+        // Bind Logo 1
         this.bindFileUpload('logo1', 'logo1');
 
-        // Bind League Logo
+        // Bind Logo 2
         this.bindFileUpload('logo2', 'logo2');
+
+        // Bind Team Logo
+        this.bindFileUpload('teamLogo', 'teamLogo');
         
         ['input', 'change'].forEach(eventType => {
             document.addEventListener(eventType, (e) => {

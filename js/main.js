@@ -104,7 +104,8 @@ window.CardApp = {
         layerBorder: null, 
         back: null,
         logo1: null,
-        logo2: null
+        logo2: null,
+        teamLogo: null
     },
     flakeOptions: [
         'broken-glass.jpg', 
@@ -230,7 +231,7 @@ window.CardApp = {
         if (!window.CardApp || !window.CardRenderer) return;
         const data = vaultData || window.UIHandler.getFormData();
 
-        // Keep rotation while editing card 
+        // 1. PERSIST ROTATION: Keep the card's orientation while editing
         let currentRotation = { x: 0, y: 0, z: 0 };
         if (this.cardMesh) {
             currentRotation.x = this.cardMesh.rotation.x;
@@ -238,12 +239,14 @@ window.CardApp = {
             currentRotation.z = this.cardMesh.rotation.z;
         }
         
+        // 2. RENDER CANVASES: Update the 2D source graphics
         window.CardRenderer.renderFront(data, this.userImages);
         window.CardRenderer.renderBack(data, this.userImages);
 
+        // 3. TEXTURE EXTRACTION: Convert canvases to Three.js textures
         const getCanvasTex = (id) => {
             const el = document.getElementById(id);
-            if (!el) return null; // Prevents crash if element is null
+            if (!el) return null;
             const tex = new THREE.CanvasTexture(el);
             tex.flipY = true;
             tex.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
@@ -256,14 +259,9 @@ window.CardApp = {
         const texBorder = getCanvasTex('hidden-canvas-border');
         const texVP = getCanvasTex('hidden-canvas-vp');
         const texLL = getCanvasTex('hidden-canvas-league');
+        const texTeamLogo = getCanvasTex('hidden-canvas-team-logo'); // NEW: Team Logo Foil source
 
-        const maxAnisotropy = this.renderer.capabilities.getMaxAnisotropy();
-        [texF, texB, texP, texBorder, texVP, texLL].forEach(t => {
-            t.flipY = true;
-            t.anisotropy = maxAnisotropy;
-            t.needsUpdate = true;
-        });
-
+        // 4. CLEANUP: Dispose of old geometry/materials to prevent memory leaks
         if (this.cardMesh) {
             this.cardMesh.traverse((child) => {
                 if (child.isMesh) {
@@ -278,6 +276,7 @@ window.CardApp = {
             this.scene.remove(this.cardMesh);
         }
 
+        // 5. MATERIAL BUILDER: Helper for Standard vs Shader materials
         const sideMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
         
         const backMat = new THREE.MeshStandardMaterial({ 
@@ -324,35 +323,46 @@ window.CardApp = {
             });
         };
 
-        // 1. Background
+        // 6. MESH ASSEMBLY
+        // Create the main card box
         const frontMat = getMaterial(texF, data.holoBg, false);
         this.cardMesh = new THREE.Mesh(
             new THREE.BoxGeometry(3.5, 5, 0.1), 
             [sideMat, sideMat, sideMat, sideMat, frontMat, backMat]
         );
 
+        // Re-apply the rotation captured at the start
         this.cardMesh.rotation.set(currentRotation.x, currentRotation.y, currentRotation.z);
-
         this.scene.add(this.cardMesh);
 
-        // 2. Player Overlay
+        // --- FRONT OVERLAYS ---
+        // Player Overlay
         const pMat = getMaterial(texP, data.holoPlayer, true);
         const pMesh = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 5), pMat);
         pMesh.position.z = 0.051; 
         this.cardMesh.add(pMesh);
 
-        // 3. Border Overlay
+        // Border Overlay
         const bMat = getMaterial(texBorder, data.holoBorder, true);
         const bMesh = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 5), bMat);
         bMesh.position.z = 0.052; 
         this.cardMesh.add(bMesh);
 
-        // 4. Back Logo Overlays (Ordered Logos)
+        // --- BACK OVERLAYS ---
+        // NEW: Team Logo Foil (Watermark style on back)
+        const tlMat = getMaterial(texTeamLogo, true, true); // Always foil, always transparent
+        const tlMesh = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 5), tlMat);
+        tlMesh.position.z = -0.0505; // Sit just behind the back face
+        tlMesh.rotation.y = Math.PI;
+        this.cardMesh.add(tlMesh);
+
+        // Back Logo 1 (Virtual Packs)
         const logo1Mesh = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 5), getMaterial(texVP, data.isFoil, true));
         logo1Mesh.position.z = -0.051; 
         logo1Mesh.rotation.y = Math.PI;
         this.cardMesh.add(logo1Mesh);
 
+        // Back Logo 2 (League)
         const logo2Mesh = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 5), getMaterial(texLL, data.isFoil, true));
         logo2Mesh.position.z = -0.052; 
         logo2Mesh.rotation.y = Math.PI;

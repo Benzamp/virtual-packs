@@ -646,67 +646,87 @@ window.CardApp = {
         }, { passive: false });
     },
 
+    // Add this helper inside CardApp to handle multi-layer uploads
+    async uploadLayer(key, imageElement) {
+        if (!imageElement || !imageElement.src.startsWith('data:')) return null;
+        
+        // Convert current memory image to a Blob
+        const response = await fetch(imageElement.src);
+        const blob = await response.blob();
+        const fileName = `${key}_${Date.now()}.webp`;
+
+        const { data, error } = await window.supabase.storage
+            .from('card-thumbnails') // You can use a dedicated 'layers' bucket if preferred
+            .upload(fileName, blob);
+
+        if (error) throw error;
+        return window.supabase.storage.from('card-thumbnails').getPublicUrl(fileName).data.publicUrl;
+    },
+
     async saveToVault() {
         const formData = window.UIHandler.getFormData();
-        
         const customName = prompt("Card Name:", `${formData.fName} ${formData.lName}`);
         if (!customName) return;
-
         const customSeason = prompt("Season:", "2026");
         if (!customSeason) return;
 
         try {
-            // Prepare record - explicitly do NOT include an 'id' property here
+            // 1. Helper function to upload an individual layer to storage
+            const uploadLayer = async (imgElement, fileName) => {
+                if (!imgElement || !imgElement.src.startsWith('data:')) return imgElement?.src || null;
+                
+                const blob = await (await fetch(imgElement.src)).blob();
+                const path = `layers/${Date.now()}_${fileName}.webp`;
+                
+                const { error } = await window.supabase.storage
+                    .from('card-thumbnails')
+                    .upload(path, blob);
+                
+                if (error) throw error;
+                return window.supabase.storage.from('card-thumbnails').getPublicUrl(path).data.publicUrl;
+            };
+
+            // 2. Upload all active images and get their Cloud URLs
+            const bgUrl = await uploadLayer(window.CardApp.userImages.layerBg, 'bg');
+            const playerUrl = await uploadLayer(window.CardApp.userImages.layerPlayer, 'player');
+            const borderUrl = await uploadLayer(window.CardApp.userImages.layerBorder, 'border');
+            const seasonLogoUrl = await uploadLayer(window.CardApp.userImages.seasonLogo, 'season');
+            const teamLogoUrl = await uploadLayer(window.CardApp.userImages.teamLogo, 'team');
+
+            // 3. Prepare the final record with Cloud URLs
             const cardRecord = {
                 cardName: customName,
                 cardSeason: customSeason,
                 fName: formData.fName,
                 lName: formData.lName,
                 team: formData.team,
-                pPosition: formData.pPosition,
-                pNumber: formData.pNumber,
-                quote: formData.quote,
-                themeColor: formData.themeColor,
-                holoBg: formData.holoBg,
-                holoPlayer: formData.holoPlayer,
-                holoBorder: formData.holoBorder,
-                fNameStyle: formData.fNameStyle,
-                lNameStyle: formData.lNameStyle,
-                numStyle: formData.numStyle,
-                posStyle: formData.posStyle,
-                teamLogoData: formData.teamLogoData,
-                seasonLogoData: formData.seasonLogoData,
-                stats: formData.stats,
-                config: formData 
+                config: {
+                    ...formData,
+                    bgUrl, 
+                    playerUrl, 
+                    borderUrl, 
+                    seasonLogoUrl, 
+                    teamLogoUrl
+                }
             };
 
-            // Render and Upload
+            // 4. Render and Upload the main Gallery Thumbnail
             this.renderer.render(this.scene, this.camera);
-            const blob = await new Promise(res => this.renderer.domElement.toBlob(res, 'image/webp', 0.8));
-            const fileName = `card_${Date.now()}.webp`;
-
-            const { data: storageData, error: sErr } = await window.supabase.storage
-                .from('card-thumbnails')
-                .upload(fileName, blob);
+            const thumbBlob = await new Promise(res => this.renderer.domElement.toBlob(res, 'image/webp', 0.8));
+            const thumbPath = `thumbs/card_${Date.now()}.webp`;
             
-            if (sErr) throw sErr;
+            await window.supabase.storage.from('card-thumbnails').upload(thumbPath, thumbBlob);
+            cardRecord.image_url = window.supabase.storage.from('card-thumbnails').getPublicUrl(thumbPath).data.publicUrl;
 
-            const { data: urlData } = window.supabase.storage
-                .from('card-thumbnails')
-                .getPublicUrl(fileName);
+            // 5. Save to Database
+            const { error: dbErr } = await window.supabase.from('cards').insert([cardRecord]);
+            if (dbErr) throw dbErr;
 
-            cardRecord.image_url = urlData.publicUrl;
-
-            // Always use .insert() for new cards to avoid primary key conflicts
-            const { error: iErr } = await window.supabase
-                .from('cards')
-                .insert([cardRecord]);
-            
-            if (iErr) throw iErr;
-
-            alert("Card saved successfully!");
+            alert("Card and all layers saved successfully!");
             this.renderGallery();
+
         } catch (err) {
+            console.error("Save Error:", err);
             alert("Save failed: " + err.message);
         }
     },
@@ -740,25 +760,63 @@ window.CardApp = {
         }
     },
 
+    // Step A: The URL-to-Memory Helper
+    async hydrateImage(url) {
+        if (!url) return null;
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = "anonymous"; // Essential for Supabase/Canvas security
+            img.onload = () => resolve(img);
+            img.onerror = () => {
+                console.error("Failed to hydrate image from:", url);
+                resolve(null); // Resolve null so the whole app doesn't crash
+            };
+            img.src = url;
+        });
+    },
+
+    // Step B: The Multi-Layer Load
     async loadFromVault(recordId) {
         try {
             const { data: record, error } = await window.supabase
-                .from('cards')
-                .select('*')
-                .eq('id', recordId)
-                .single();
+                .from('cards').select('*').eq('id', recordId).single();
 
-            if (record) {
-                this.currentLoadedId = record.id; // Store the ID
-                this.applyDataToUI(record.config);
-                this.updateCard();
-                
-                // Show the Update button, since we are editing an existing record
-                document.getElementById('update-vault-btn')?.classList.remove('hidden');
-                
-                if (typeof switchView === 'function') switchView('creator');
-            }
-        } catch (err) { console.error(err); }
+            if (error || !record) return alert("Card not found.");
+
+            const cfg = record.config;
+            this.currentLoadedId = record.id;
+
+            // 1. FORCED HYDRATION: Re-populate the memory object the Editor uses
+            console.log("🌊 Hydrating Editor Memory...");
+            this.userImages.layerBg = await this.hydrateImage(cfg.bgUrl);
+            this.userImages.layerPlayer = await this.hydrateImage(cfg.playerUrl);
+            this.userImages.layerBorder = await this.hydrateImage(cfg.borderUrl);
+            this.userImages.seasonLogo = await this.hydrateImage(cfg.seasonLogoUrl);
+            this.userImages.teamLogo = await this.hydrateImage(cfg.teamLogoUrl);
+
+            // 2. FILL TEXTBOXES: Update the names/stats
+            this.applyDataToUI(cfg);
+
+            // 3. FORCE REDRAW: Tell the 3D Engine to look at its memory NOW
+            this.updateCard();
+            
+            document.getElementById('update-vault-btn')?.classList.remove('hidden');
+            switchView('creator');
+
+        } catch (err) {
+            console.error("Hydration Failed:", err);
+        }
+    },
+
+    // Helper to convert a URL into a usable Image object
+    async loadImageFromUrl(url) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = "anonymous"; // CRITICAL: Supabase requires this to draw to Canvas
+            img.onload = () => resolve(img);
+            img.onerror = (e) => reject(e);
+            img.src = url;
+        });
     },
 
     async updateExistingCard() {

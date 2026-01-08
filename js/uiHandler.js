@@ -216,6 +216,8 @@ window.UIHandler = {
             themeColor: getVal('themeColor'),
             isFoil: getChecked('isFoil'),
 
+            flakeType: getVal('flakeType') || "assets/foil-textures/broken-glass.jpg",
+
             holoBg: document.getElementById('holoBg')?.checked || false,
             holoPlayer: document.getElementById('holoPlayer')?.checked || false,
             holoBorder: document.getElementById('holoBorder')?.checked || false,

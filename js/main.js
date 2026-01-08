@@ -197,6 +197,54 @@ window.CardApp = {
         window.addEventListener('resize', () => this.handleResize());
     },
 
+    async loadLatestCard() {
+        try {
+            const { data: record, error } = await window.supabase
+                .from('cards')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+
+            if (error || !record) return;
+
+            console.log("🌊 Restoring latest session:", record.cardName);
+            const cfg = record.config;
+            this.currentLoadedId = record.id;
+
+            // Parallel Hydration
+            await Promise.all([
+                this.hydrateImage(cfg.bgUrl).then(img => this.userImages.layerBg = img),
+                this.hydrateImage(cfg.playerUrl).then(img => this.userImages.layerPlayer = img),
+                this.hydrateImage(cfg.borderUrl).then(img => this.userImages.layerBorder = img),
+                this.hydrateImage(cfg.seasonLogoUrl).then(img => this.userImages.seasonLogo = img),
+                this.hydrateImage(cfg.teamLogoUrl).then(img => this.userImages.teamLogo = img),
+                this.hydrateImage(cfg.backBgUrl).then(img => this.userImages.back = img),
+                this.hydrateImage(cfg.logo1Url).then(img => this.userImages.logo1 = img),
+                this.hydrateImage(cfg.logo2Url).then(img => this.userImages.logo2 = img)
+            ]);
+
+            if (cfg.flakeType) {
+                console.log("💎 Applying Card-Specific Holo:", cfg.flakeType);
+                
+                // 1. Force the 3D Engine to load the specific texture
+                this.changeFlakeTexture(cfg.flakeType); 
+                
+                // 2. Sync the Sidebar UI dropdown so the user sees what is active
+                const flakeDropdown = document.getElementById('flakeType');
+                if (flakeDropdown) flakeDropdown.value = cfg.flakeType;
+            }
+
+            this.applyDataToUI(cfg);
+            this.updateCard();
+            
+            document.getElementById('update-vault-btn')?.classList.remove('hidden');
+
+        } catch (err) {
+            console.error("Session Restore Failed:", err);
+        }
+    },
+
     exportCardAsGif() {
         // 1. Configuration
         const duration = 2; 
@@ -286,11 +334,22 @@ window.CardApp = {
     },
 
     changeFlakeTexture(path) {
+        if (!path) return;
         const loader = new THREE.TextureLoader();
         loader.load(path, (tex) => {
             tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-            this.flakeMap = tex;
-            this.updateCard();
+            this.flakeMap = tex; // Update the reference for this session
+
+            // Manually inject the texture into the Shader uniforms
+            if (this.cardMesh) {
+                this.cardMesh.traverse((child) => {
+                    if (child.material && child.material.uniforms && child.material.uniforms.uFlakeMap) {
+                        child.material.uniforms.uFlakeMap.value = tex;
+                    }
+                });
+            }
+            // Force a redraw to see the change
+            this.updateCard(); 
         });
     },
 
@@ -646,26 +705,10 @@ window.CardApp = {
         }, { passive: false });
     },
 
-    // Add this helper inside CardApp to handle multi-layer uploads
-    async uploadLayer(key, imageElement) {
-        if (!imageElement || !imageElement.src.startsWith('data:')) return null;
-        
-        // Convert current memory image to a Blob
-        const response = await fetch(imageElement.src);
-        const blob = await response.blob();
-        const fileName = `${key}_${Date.now()}.webp`;
-
-        const { data, error } = await window.supabase.storage
-            .from('card-thumbnails') // You can use a dedicated 'layers' bucket if preferred
-            .upload(fileName, blob);
-
-        if (error) throw error;
-        return window.supabase.storage.from('card-thumbnails').getPublicUrl(fileName).data.publicUrl;
-    },
-
     async saveToVault() {
         const formData = window.UIHandler.getFormData();
         const customName = prompt("Card Name:", `${formData.fName} ${formData.lName}`);
+
         if (!customName) return;
         const customSeason = prompt("Season:", "2026");
         if (!customSeason) return;
@@ -715,6 +758,7 @@ window.CardApp = {
                     borderUrl, 
                     seasonLogoUrl, 
                     teamLogoUrl,
+                    flakeType: formData.flakeType,
                     // Back Assets
                     backBgUrl,
                     logo1Url,
@@ -729,49 +773,29 @@ window.CardApp = {
             await window.supabase.storage.from('card-thumbnails').upload(thumbPath, thumbBlob);
             cardRecord.image_url = window.supabase.storage.from('card-thumbnails').getPublicUrl(thumbPath).data.publicUrl;
 
+            // Add this inside your Save function
+            const finalConfig = window.UIHandler.getFormData();
+            console.log("🔍 FULL PAYLOAD TO SUPABASE:", finalConfig); 
+
+            // Check if 'flakeType' is actually in this console log!
+
             // 4. Save to Database
-            const { error: dbErr } = await window.supabase.from('cards').insert([cardRecord]);
-            if (dbErr) throw dbErr;
+            const { data: dbData, error: dbErr } = await window.supabase
+                    .from('cards')
+                    .insert([cardRecord]);
 
-            alert("Full card (Front & Back) saved successfully!");
-            this.renderGallery();
+                if (dbErr) throw dbErr;
 
-        } catch (err) {
-            console.error("Save Error:", err);
-            alert("Save failed: " + err.message);
-        }
+                alert("Full card (Front & Back) saved successfully!");
+                this.renderGallery();
+
+            } catch (err) {
+                console.error("Save Error:", err);
+                alert("Save failed: " + err.message);
+            }
     },
 
-    async loadLatestCard() {
-        try {
-            // Query the 'cards' table, order by newest first, and grab only one
-            const { data: record, error } = await window.supabase
-                .from('cards')
-                .select('*')
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .single();
-
-            if (error) {
-                console.log("No previous cards found or error fetching:", error.message);
-                return;
-            }
-
-            if (record) {
-                console.log("Loading most recent card:", record.fName);
-                // Apply the UI settings (sliders, text, etc.)
-                this.applyDataToUI(record.config);
-                
-                // Note: If you want to auto-load the images, you would need to 
-                // ensure the image URLs are stored and handled here too.
-                this.updateCard();
-            }
-        } catch (err) {
-            console.error("Fetch error:", err);
-        }
-    },
-
-    // Step A: The URL-to-Memory Helper
+     // Step A: The URL-to-Memory Helper
     async hydrateImage(url) {
         if (!url) return null;
         return new Promise((resolve, reject) => {
@@ -786,76 +810,125 @@ window.CardApp = {
         });
     },
 
+    async updateExistingCard() {
+        if (!this.currentLoadedId) return alert("No card loaded to update.");
+
+        // 1. Gather all current text/stat data from sidebar
+        const formData = window.UIHandler.getFormData();
+        
+        try {
+            console.log("🆙 Updating Cloud Record:", this.currentLoadedId);
+
+            // 3. Prepare the update payload
+            // We preserve the existing image URLs already in this.userImages
+            const updateData = {
+                fName: formData.fName,
+                lName: formData.lName,
+                team: formData.team,
+                config: {
+                    ...formData,
+                    flakeType: currentFlake,
+                    // Preserve the URLs so they remain editable next time you load
+                    bgUrl: this.userImages.layerBg?.src || null,
+                    playerUrl: this.userImages.layerPlayer?.src || null,
+                    borderUrl: this.userImages.layerBorder?.src || null,
+                    seasonLogoUrl: this.userImages.seasonLogo?.src || null,
+                    teamLogoUrl: this.userImages.teamLogo?.src || null,
+                    backBgUrl: this.userImages.back?.src || null,
+                    logo1Url: this.userImages.logo1?.src || null,
+                    logo2Url: this.userImages.logo2?.src || null
+                }
+            };
+
+            // 4. Update the Database row where ID matches
+            const { error } = await window.supabase
+                .from('cards')
+                .update(updateData)
+                .eq('id', this.currentLoadedId);
+
+            if (error) throw error;
+
+            // 5. Optional: Re-render the thumbnail so the Vault gallery stays updated
+            this.renderer.render(this.scene, this.camera);
+            const thumbBlob = await new Promise(res => this.renderer.domElement.toBlob(res, 'image/webp', 0.8));
+            const thumbPath = `thumbs/card_${this.currentLoadedId}_${Date.now()}.webp`;
+            
+            const { error: storageErr } = await window.supabase.storage
+                .from('card-thumbnails')
+                .upload(thumbPath, thumbBlob);
+
+            if (!storageErr) {
+                const { data: urlData } = window.supabase.storage
+                    .from('card-thumbnails')
+                    .getPublicUrl(thumbPath);
+                    
+                await window.supabase
+                    .from('cards')
+                    .update({ image_url: urlData.publicUrl })
+                    .eq('id', this.currentLoadedId);
+            }
+
+            alert("Cloud Record and Thumbnail Updated!");
+            
+        } catch (err) {
+            console.error("Update Error:", err);
+            alert("Update failed: " + err.message);
+        }
+    },
+
     // Step B: The Multi-Layer Load
     async loadFromVault(recordId) {
+        console.log("🚀 Loading Card ID:", recordId);
         try {
             const { data: record, error } = await window.supabase
                 .from('cards').select('*').eq('id', recordId).single();
 
             if (error || !record) return alert("Card not found.");
 
-            const cfg = record.config;
             this.currentLoadedId = record.id;
+            const cfg = record.config;
 
-            // 1. FORCED HYDRATION: Re-populate the memory object the Editor uses
-            console.log("🌊 Hydrating Editor Memory...");
-            this.userImages.layerBg = await this.hydrateImage(cfg.bgUrl);
-            this.userImages.layerPlayer = await this.hydrateImage(cfg.playerUrl);
-            this.userImages.layerBorder = await this.hydrateImage(cfg.borderUrl);
-            this.userImages.seasonLogo = await this.hydrateImage(cfg.seasonLogoUrl);
-            this.userImages.teamLogo = await this.hydrateImage(cfg.teamLogoUrl);
-            this.userImages.back = await this.hydrateImage(cfg.backBgUrl);
-            this.userImages.logo1 = await this.hydrateImage(cfg.logo1Url);
-            this.userImages.logo2 = await this.hydrateImage(cfg.logo2Url);
+            // 1. Memory Reset: Prevent ghost layers from previous cards
+            this.userImages = { 
+                layerBg: null, layerPlayer: null, layerBorder: null, 
+                back: null, logo1: null, logo2: null, 
+                teamLogo: null, seasonLogo: null 
+            };
 
-            // 2. FILL TEXTBOXES: Update the names/stats
+            // 2. Parallel Hydration: Download all image assets
+            await Promise.all([
+                this.hydrateImage(cfg.bgUrl).then(img => this.userImages.layerBg = img),
+                this.hydrateImage(cfg.playerUrl).then(img => this.userImages.layerPlayer = img),
+                this.hydrateImage(cfg.borderUrl).then(img => this.userImages.layerBorder = img),
+                this.hydrateImage(cfg.seasonLogoUrl).then(img => this.userImages.seasonLogo = img),
+                this.hydrateImage(cfg.teamLogoUrl).then(img => this.userImages.teamLogo = img),
+                this.hydrateImage(cfg.backBgUrl).then(img => this.userImages.back = img),
+                this.hydrateImage(cfg.logo1Url).then(img => this.userImages.logo1 = img),
+                this.hydrateImage(cfg.logo2Url).then(img => this.userImages.logo2 = img)
+            ]);
+
+            // 3. Fix Holo Type: Apply the saved foil pattern
+            if (cfg.flakeType) {
+                console.log("💎 Applying Card-Specific Holo:", cfg.flakeType);
+                
+                // 1. Force the 3D Engine to load the specific texture
+                this.changeFlakeTexture(cfg.flakeType); 
+                
+                // 2. Sync the Sidebar UI dropdown so the user sees what is active
+                const flakeDropdown = document.getElementById('flakeType');
+                if (flakeDropdown) flakeDropdown.value = cfg.flakeType;
+            }
+                        // 4. Fill UI: Update text and dispatch events for labels
             this.applyDataToUI(cfg);
 
-            // 3. FORCE REDRAW: Tell the 3D Engine to look at its memory NOW
+            // 5. Render: Final 3D Redraw
             this.updateCard();
             
             document.getElementById('update-vault-btn')?.classList.remove('hidden');
             switchView('creator');
 
         } catch (err) {
-            console.error("Hydration Failed:", err);
-        }
-    },
-
-    // Helper to convert a URL into a usable Image object
-    async loadImageFromUrl(url) {
-        return new Promise((resolve, reject) => {
-            const img = new Image();
-            img.crossOrigin = "anonymous"; // CRITICAL: Supabase requires this to draw to Canvas
-            img.onload = () => resolve(img);
-            img.onerror = (e) => reject(e);
-            img.src = url;
-        });
-    },
-
-    async updateExistingCard() {
-        if (!this.currentLoadedId) return alert("No card loaded to update.");
-
-        const formData = window.UIHandler.getFormData();
-        
-        try {
-            // Update the record where ID matches currentLoadedId
-            const { error } = await window.supabase
-                .from('cards')
-                .update({
-                    config: formData,
-                    fName: formData.fName,
-                    lName: formData.lName,
-                    team: formData.team,
-                    // Keep existing cardName/Season or update them from formData if desired
-                })
-                .eq('id', this.currentLoadedId);
-
-            if (error) throw error;
-            alert("Cloud Record Updated Successfully!");
-            
-        } catch (err) {
-            alert("Update failed: " + err.message);
+            console.error("Load Error:", err);
         }
     },
 
@@ -913,28 +986,22 @@ window.CardApp = {
         const gallery = document.getElementById('card-gallery');
         if (!gallery) return;
 
-        // 1. Show a loading state while we talk to Supabase
         gallery.innerHTML = '<div class="loader">Accessing Cloud Vault...</div>';
 
         try {
-            // 2. Fetch cards from Supabase ordered by newest first
             const { data: cards, error } = await window.supabase
                 .from('cards')
                 .select('*')
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
-
-            // 3. Check if we actually have data
-            if (!cards || cards.length === 0) {
-                gallery.innerHTML = '<p style="color: #888; text-align: center; padding: 20px;">No cards found in cloud vault.</p>';
-                return;
-            }
-
-            // 4. Clear loader and render the cards
             gallery.innerHTML = ''; 
 
             cards.forEach(card => {
+                // Extract position from the config JSON
+                const cfg = typeof card.config === 'string' ? JSON.parse(card.config) : card.config;
+                const position = cfg?.pPosition || 'N/A';
+
                 const item = document.createElement('div');
                 item.className = 'menu-btn';
                 item.style.height = 'auto';
@@ -945,10 +1012,9 @@ window.CardApp = {
                     </div>
                     <span class="label" style="display: block; font-weight: bold;">${card.cardName}</span>
                     <div style="color: #aaa; font-size: 0.85em; line-height: 1.4;">
-                        <div>${card.team} | ${card.pPosition}</div>
+                        <div>${card.team} | ${position}</div> 
                         <div style="color: #8b5cf6; font-weight: bold;">SEASON: ${card.cardSeason}</div>
                     </div>
-                    
                     <button onclick="window.CardApp.loadFromVault('${card.id}')" 
                             style="width: 100%; margin-top: 12px; background: #8b5cf6; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: bold;">
                         LOAD DATA
@@ -956,10 +1022,8 @@ window.CardApp = {
                 `;
                 gallery.appendChild(item);
             });
-
         } catch (err) {
             console.error("Gallery Load Error:", err.message);
-            gallery.innerHTML = `<p style="color: #ff4444;">Error loading vault: ${err.message}</p>`;
         }
     }
 };

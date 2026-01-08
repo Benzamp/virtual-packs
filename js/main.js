@@ -671,9 +671,11 @@ window.CardApp = {
         if (!customSeason) return;
 
         try {
-            // 1. Helper function to upload an individual layer to storage
             const uploadLayer = async (imgElement, fileName) => {
-                if (!imgElement || !imgElement.src.startsWith('data:')) return imgElement?.src || null;
+                // If there's no image, or it's already a cloud URL, return as is
+                if (!imgElement || !imgElement.src || !imgElement.src.startsWith('data:')) {
+                    return imgElement?.src || null;
+                }
                 
                 const blob = await (await fetch(imgElement.src)).blob();
                 const path = `layers/${Date.now()}_${fileName}.webp`;
@@ -686,14 +688,19 @@ window.CardApp = {
                 return window.supabase.storage.from('card-thumbnails').getPublicUrl(path).data.publicUrl;
             };
 
-            // 2. Upload all active images and get their Cloud URLs
+            // 1. Upload ALL active images (Front & Back)
             const bgUrl = await uploadLayer(window.CardApp.userImages.layerBg, 'bg');
             const playerUrl = await uploadLayer(window.CardApp.userImages.layerPlayer, 'player');
             const borderUrl = await uploadLayer(window.CardApp.userImages.layerBorder, 'border');
             const seasonLogoUrl = await uploadLayer(window.CardApp.userImages.seasonLogo, 'season');
             const teamLogoUrl = await uploadLayer(window.CardApp.userImages.teamLogo, 'team');
+            
+            // --- NEW: BACK SIDE LAYERS ---
+            const backBgUrl = await uploadLayer(window.CardApp.userImages.back, 'back_bg');
+            const logo1Url = await uploadLayer(window.CardApp.userImages.logo1, 'logo1');
+            const logo2Url = await uploadLayer(window.CardApp.userImages.logo2, 'logo2');
 
-            // 3. Prepare the final record with Cloud URLs
+            // 2. Prepare the final record with all Cloud URLs
             const cardRecord = {
                 cardName: customName,
                 cardSeason: customSeason,
@@ -702,27 +709,31 @@ window.CardApp = {
                 team: formData.team,
                 config: {
                     ...formData,
+                    // Front Assets
                     bgUrl, 
                     playerUrl, 
                     borderUrl, 
                     seasonLogoUrl, 
-                    teamLogoUrl
+                    teamLogoUrl,
+                    // Back Assets
+                    backBgUrl,
+                    logo1Url,
+                    logo2Url
                 }
             };
 
-            // 4. Render and Upload the main Gallery Thumbnail
+            // 3. Render and Upload Gallery Thumbnail
             this.renderer.render(this.scene, this.camera);
             const thumbBlob = await new Promise(res => this.renderer.domElement.toBlob(res, 'image/webp', 0.8));
             const thumbPath = `thumbs/card_${Date.now()}.webp`;
-            
             await window.supabase.storage.from('card-thumbnails').upload(thumbPath, thumbBlob);
             cardRecord.image_url = window.supabase.storage.from('card-thumbnails').getPublicUrl(thumbPath).data.publicUrl;
 
-            // 5. Save to Database
+            // 4. Save to Database
             const { error: dbErr } = await window.supabase.from('cards').insert([cardRecord]);
             if (dbErr) throw dbErr;
 
-            alert("Card and all layers saved successfully!");
+            alert("Full card (Front & Back) saved successfully!");
             this.renderGallery();
 
         } catch (err) {
@@ -793,6 +804,9 @@ window.CardApp = {
             this.userImages.layerBorder = await this.hydrateImage(cfg.borderUrl);
             this.userImages.seasonLogo = await this.hydrateImage(cfg.seasonLogoUrl);
             this.userImages.teamLogo = await this.hydrateImage(cfg.teamLogoUrl);
+            this.userImages.back = await this.hydrateImage(cfg.backBgUrl);
+            this.userImages.logo1 = await this.hydrateImage(cfg.logo1Url);
+            this.userImages.logo2 = await this.hydrateImage(cfg.logo2Url);
 
             // 2. FILL TEXTBOXES: Update the names/stats
             this.applyDataToUI(cfg);

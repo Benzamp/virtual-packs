@@ -706,93 +706,81 @@ window.CardApp = {
     },
 
     async saveToVault() {
-        const formData = window.UIHandler.getFormData();
-        const customName = prompt("Card Name:", `${formData.fName} ${formData.lName}`);
+    // 0. Capture variables from the UI immediately
+    const formData = window.UIHandler.getFormData();
+    const flakeType = document.getElementById('flakeType')?.value; 
 
-        if (!customName) return;
-        const customSeason = prompt("Season:", "2026");
-        if (!customSeason) return;
+    const customName = prompt("Card Name:", `${formData.fName} ${formData.lName}`);
+    if (!customName) return;
+    const customSeason = prompt("Season:", "2026");
+    if (!customSeason) return;
 
-        try {
-            const uploadLayer = async (imgElement, fileName) => {
-                // If there's no image, or it's already a cloud URL, return as is
-                if (!imgElement || !imgElement.src || !imgElement.src.startsWith('data:')) {
-                    return imgElement?.src || null;
-                }
-                
-                const blob = await (await fetch(imgElement.src)).blob();
-                const path = `layers/${Date.now()}_${fileName}.webp`;
-                
-                const { error } = await window.supabase.storage
-                    .from('card-thumbnails')
-                    .upload(path, blob);
-                
-                if (error) throw error;
-                return window.supabase.storage.from('card-thumbnails').getPublicUrl(path).data.publicUrl;
-            };
-
-            // 1. Upload ALL active images (Front & Back)
-            const bgUrl = await uploadLayer(window.CardApp.userImages.layerBg, 'bg');
-            const playerUrl = await uploadLayer(window.CardApp.userImages.layerPlayer, 'player');
-            const borderUrl = await uploadLayer(window.CardApp.userImages.layerBorder, 'border');
-            const seasonLogoUrl = await uploadLayer(window.CardApp.userImages.seasonLogo, 'season');
-            const teamLogoUrl = await uploadLayer(window.CardApp.userImages.teamLogo, 'team');
-            
-            // --- NEW: BACK SIDE LAYERS ---
-            const backBgUrl = await uploadLayer(window.CardApp.userImages.back, 'back_bg');
-            const logo1Url = await uploadLayer(window.CardApp.userImages.logo1, 'logo1');
-            const logo2Url = await uploadLayer(window.CardApp.userImages.logo2, 'logo2');
-
-            // 2. Prepare the final record with all Cloud URLs
-            const cardRecord = {
-                cardName: customName,
-                cardSeason: customSeason,
-                fName: formData.fName,
-                lName: formData.lName,
-                team: formData.team,
-                config: {
-                    ...formData,
-                    // Front Assets
-                    bgUrl, 
-                    playerUrl, 
-                    borderUrl, 
-                    seasonLogoUrl, 
-                    teamLogoUrl,
-                    flakeType: formData.flakeType,
-                    // Back Assets
-                    backBgUrl,
-                    logo1Url,
-                    logo2Url
-                }
-            };
-
-            // 3. Render and Upload Gallery Thumbnail
-            this.renderer.render(this.scene, this.camera);
-            const thumbBlob = await new Promise(res => this.renderer.domElement.toBlob(res, 'image/webp', 0.8));
-            const thumbPath = `thumbs/card_${Date.now()}.webp`;
-            await window.supabase.storage.from('card-thumbnails').upload(thumbPath, thumbBlob);
-            cardRecord.image_url = window.supabase.storage.from('card-thumbnails').getPublicUrl(thumbPath).data.publicUrl;
-
-            // Add this inside your Save function
-            const finalConfig = window.UIHandler.getFormData();
-            console.log("🔍 FULL PAYLOAD TO SUPABASE:", finalConfig); 
-
-            // Check if 'flakeType' is actually in this console log!
-
-            // 4. Save to Database
-            const { data: dbData, error: dbErr } = await window.supabase
-                    .from('cards')
-                    .insert([cardRecord]);
-
-                if (dbErr) throw dbErr;
-
-                alert("Full card (Front & Back) saved successfully!");
-                this.renderGallery();
-
-            } catch (err) {
-                console.error("Save Error:", err);
-                alert("Save failed: " + err.message);
+    try {
+        const uploadLayer = async (imgElement, fileName) => {
+            if (!imgElement || !imgElement.src || !imgElement.src.startsWith('data:')) {
+                return imgElement?.src || null;
             }
+            
+            const blob = await (await fetch(imgElement.src)).blob();
+            const path = `layers/${Date.now()}_${fileName}.webp`;
+            
+            // FIXED: Using 'path' and 'blob' correctly here
+            const { error: storageErr } = await window.supabase.storage
+                .from('card-thumbnails')
+                .upload(path, blob);
+            
+            if (storageErr) throw storageErr;
+            return window.supabase.storage.from('card-thumbnails').getPublicUrl(path).data.publicUrl;
+        };
+
+        // 1. Upload ALL active images
+        const bgUrl = await uploadLayer(window.CardApp.userImages.layerBg, 'bg');
+        const playerUrl = await uploadLayer(window.CardApp.userImages.layerPlayer, 'player');
+        const borderUrl = await uploadLayer(window.CardApp.userImages.layerBorder, 'border');
+        const seasonLogoUrl = await uploadLayer(window.CardApp.userImages.seasonLogo, 'season');
+        const teamLogoUrl = await uploadLayer(window.CardApp.userImages.teamLogo, 'team');
+        const backBgUrl = await uploadLayer(window.CardApp.userImages.back, 'back_bg');
+        const logo1Url = await uploadLayer(window.CardApp.userImages.logo1, 'logo1');
+        const logo2Url = await uploadLayer(window.CardApp.userImages.logo2, 'logo2');
+
+        // 2. Prepare the final record
+        const cardRecord = {
+            cardName: customName,
+            cardSeason: customSeason,
+            fName: formData.fName,
+            lName: formData.lName,
+            team: formData.team,
+            pPosition: formData.pPosition,
+            config: {
+                ...formData,
+                bgUrl, playerUrl, borderUrl, 
+                teamLogoUrl, seasonLogoUrl,
+                flakeType, // Now properly defined and pinned
+                backBgUrl, logo1Url, logo2Url
+            }
+        };
+
+        // 3. Render and Upload Gallery Thumbnail
+        this.renderer.render(this.scene, this.camera);
+        const thumbBlob = await new Promise(res => this.renderer.domElement.toBlob(res, 'image/webp', 0.8));
+        const thumbPath = `thumbs/card_${Date.now()}.webp`;
+        await window.supabase.storage.from('card-thumbnails').upload(thumbPath, thumbBlob);
+        cardRecord.image_url = window.supabase.storage.from('card-thumbnails').getPublicUrl(thumbPath).data.publicUrl;
+
+        // 4. Save to Database
+        const { error: dbErr } = await window.supabase
+            .from('cards')
+            .insert([cardRecord]);
+
+        if (dbErr) throw dbErr;
+
+        alert("Full card (Front & Back) saved successfully!");
+        this.renderGallery();
+
+    } catch (err) {
+        console.error("Save Error:", err);
+        alert("Save failed: " + err.message);
+    }
     },
 
      // Step A: The URL-to-Memory Helper
@@ -813,65 +801,55 @@ window.CardApp = {
     async updateExistingCard() {
         if (!this.currentLoadedId) return alert("No card loaded to update.");
 
-        // 1. Gather all current text/stat data from sidebar
+        // 1. FRESH CAPTURE: Get the newest UI values
         const formData = window.UIHandler.getFormData();
-        
-        try {
-            console.log("🆙 Updating Cloud Record:", this.currentLoadedId);
+        const activeFlake = document.getElementById('flakeType')?.value;
 
-            // 3. Prepare the update payload
-            // We preserve the existing image URLs already in this.userImages
+        try {
+            // 2. BUILD PAYLOAD: Ensure the new flake is at the top level of the config
             const updateData = {
                 fName: formData.fName,
                 lName: formData.lName,
                 team: formData.team,
+                pPosition: formData.pPosition,
                 config: {
                     ...formData,
-                    flakeType: currentFlake,
-                    // Preserve the URLs so they remain editable next time you load
-                    bgUrl: this.userImages.layerBg?.src || null,
-                    playerUrl: this.userImages.layerPlayer?.src || null,
-                    borderUrl: this.userImages.layerBorder?.src || null,
-                    seasonLogoUrl: this.userImages.seasonLogo?.src || null,
-                    teamLogoUrl: this.userImages.teamLogo?.src || null,
-                    backBgUrl: this.userImages.back?.src || null,
-                    logo1Url: this.userImages.logo1?.src || null,
-                    logo2Url: this.userImages.logo2?.src || null
+                    flakeType: activeFlake, // Explicitly overwrite the old value
+                    // Use memory for images, but fallback to DB values if memory is lost
+                    bgUrl: this.userImages.layerBg?.src || formData.bgUrl,
+                    playerUrl: this.userImages.layerPlayer?.src || formData.playerUrl,
+                    borderUrl: this.userImages.layerBorder?.src || formData.borderUrl,
+                    teamLogoUrl: this.userImages.teamLogo?.src || formData.teamLogoUrl,
+                    seasonLogoUrl: this.userImages.seasonLogo?.src || formData.seasonLogoUrl,
+                    backBgUrl: this.userImages.back?.src || formData.backBgUrl,
+                    logo1Url: this.userImages.logo1?.src || formData.logo1Url,
+                    logo2Url: this.userImages.logo2?.src || formData.logo2Url
                 }
             };
 
-            // 4. Update the Database row where ID matches
-            const { error } = await window.supabase
+            // 3. DATABASE CALL: Update the existing ID and ask for the data back
+            const { data, error: dbErr } = await window.supabase
                 .from('cards')
                 .update(updateData)
-                .eq('id', this.currentLoadedId);
+                .eq('id', this.currentLoadedId)
+                .select();
 
-            if (error) throw error;
+            if (dbErr) throw dbErr;
 
-            // 5. Optional: Re-render the thumbnail so the Vault gallery stays updated
+            // 4. STORAGE CALL: Fix the 400 error using 'upsert'
             this.renderer.render(this.scene, this.camera);
             const thumbBlob = await new Promise(res => this.renderer.domElement.toBlob(res, 'image/webp', 0.8));
-            const thumbPath = `thumbs/card_${this.currentLoadedId}_${Date.now()}.webp`;
+            const thumbPath = `thumbs/card_${this.currentLoadedId}.webp`;
             
-            const { error: storageErr } = await window.supabase.storage
+            await window.supabase.storage
                 .from('card-thumbnails')
-                .upload(thumbPath, thumbBlob);
+                .upload(thumbPath, thumbBlob, { upsert: true });
 
-            if (!storageErr) {
-                const { data: urlData } = window.supabase.storage
-                    .from('card-thumbnails')
-                    .getPublicUrl(thumbPath);
-                    
-                await window.supabase
-                    .from('cards')
-                    .update({ image_url: urlData.publicUrl })
-                    .eq('id', this.currentLoadedId);
-            }
-
-            alert("Cloud Record and Thumbnail Updated!");
+            console.log("✅ Database confirmed update:", data[0].config.flakeType);
+            alert("Card Updated Successfully!");
             
         } catch (err) {
-            console.error("Update Error:", err);
+            console.error("❌ Update Error:", err);
             alert("Update failed: " + err.message);
         }
     },

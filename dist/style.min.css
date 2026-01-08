@@ -325,11 +325,3 @@ input:focus {
   color: #fff!important;
   box-shadow: 0 0 15px rgba(239,68,68,.5)
 }
-
-.home-content {
-  text-align: center;
-
-  img {
-    margin-bottom: 25px;
-  }
-}

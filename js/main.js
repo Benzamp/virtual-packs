@@ -192,6 +192,7 @@ window.CardApp = {
         this.setupInteraction();
         this.updateCard(); 
         this.animate();
+        this.loadLatestCard(); 
         window.addEventListener('resize', () => this.handleResize());
     },
 
@@ -690,6 +691,35 @@ window.CardApp = {
         }
     },
 
+    async loadLatestCard() {
+        try {
+            // Query the 'cards' table, order by newest first, and grab only one
+            const { data: record, error } = await window.supabase
+                .from('cards')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+
+            if (error) {
+                console.log("No previous cards found or error fetching:", error.message);
+                return;
+            }
+
+            if (record) {
+                console.log("Loading most recent card:", record.fName);
+                // Apply the UI settings (sliders, text, etc.)
+                this.applyDataToUI(record.config);
+                
+                // Note: If you want to auto-load the images, you would need to 
+                // ensure the image URLs are stored and handled here too.
+                this.updateCard();
+            }
+        } catch (err) {
+            console.error("Fetch error:", err);
+        }
+    },
+
     // --- UPDATED SUPABASE LOAD LOGIC ---
     async loadFromVault(recordId) {
         const { data: record, error } = await window.supabase
@@ -774,25 +804,56 @@ window.CardApp = {
         });
     },
 
-    renderGallery() {
+    async renderGallery() {
         const gallery = document.getElementById('card-gallery');
-        const vault = JSON.parse(localStorage.getItem('vsc_vault') || '[]');
-        
-        gallery.innerHTML = vault.length ? '' : '<p>No cards found in vault.</p>';
+        if (!gallery) return;
 
-        vault.forEach(card => {
-            const item = document.createElement('div');
-            item.className = 'menu-btn'; // Reusing your existing CSS class
-            item.innerHTML = `
-                <span class="label">${card.data.fName} ${card.data.lName}</span>
-                <small>${card.timestamp}</small>
-                <button onclick="window.CardApp.loadFromVault(${card.id})" 
-                        style="margin-top:10px; background:#8b5cf6; color:white; border:none; padding:5px; border-radius:4px; cursor:pointer;">
-                    LOAD DATA
-                </button>
-            `;
-            gallery.appendChild(item);
-        });
+        // 1. Show a loading state while we talk to Supabase
+        gallery.innerHTML = '<div class="loader">Accessing Cloud Vault...</div>';
+
+        try {
+            // 2. Fetch cards from Supabase ordered by newest first
+            const { data: cards, error } = await window.supabase
+                .from('cards')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+
+            // 3. Check if we actually have data
+            if (!cards || cards.length === 0) {
+                gallery.innerHTML = '<p style="color: #888; text-align: center; padding: 20px;">No cards found in cloud vault.</p>';
+                return;
+            }
+
+            // 4. Clear loader and render the cards
+            gallery.innerHTML = ''; 
+
+            cards.forEach(card => {
+                const item = document.createElement('div');
+                item.className = 'menu-btn'; // Keeping your existing style
+                item.style.height = 'auto';
+                item.style.padding = '15px';
+                item.style.marginBottom = '10px';
+
+                item.innerHTML = `
+                    <div style="margin-bottom: 10px;">
+                        <img src="${card.image_url}" style="width: 100%; border-radius: 4px; border: 1px solid #444;">
+                    </div>
+                    <span class="label" style="display: block; font-weight: bold;">${card.fName} ${card.lName}</span>
+                    <small style="color: #aaa;">${card.team} | ${card.pPosition}</small>
+                    
+                    <button onclick="window.CardApp.loadFromVault(${card.id})" 
+                            style="width: 100%; margin-top: 10px; background: #8b5cf6; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                        LOAD DATA
+                    </button>
+                `;
+                gallery.appendChild(item);
+            });
+        } catch (err) {
+            console.error("Gallery Load Error:", err.message);
+            gallery.innerHTML = `<p style="color: #ff4444;">Error loading vault: ${err.message}</p>`;
+        }
     }
 };
 

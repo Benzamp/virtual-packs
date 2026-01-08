@@ -87,6 +87,11 @@ window.UIHandler = {
 
         // Bind Team Logo
         this.bindFileUpload('teamLogo', 'teamLogo');
+
+        this.bindFileUpload('imgLayerLogo', 'layerLogo');
+
+        // Bind Season Logo
+        this.bindFileUpload('imgLayerSeason', 'seasonLogo');
         
         ['input', 'change'].forEach(eventType => {
             document.addEventListener(eventType, (e) => {
@@ -143,6 +148,10 @@ window.UIHandler = {
             const label = document.getElementById(`val${s}`);
             const input = document.getElementById(`nick${s}`);
             if (label && input) label.innerText = input.value;
+
+            const sLabel = document.getElementById(`valSeason${s}`);
+            const sInput = document.getElementById(`season${s}`);
+            if (sLabel && sInput) sLabel.innerText = sInput.value;
         });
 
         return {
@@ -157,6 +166,21 @@ window.UIHandler = {
                 rot: getNum('fNameRot'),
                 size: getNum('fNameSize'),
                 font: getVal('fNameFont')
+            },
+
+            // Jersey Number Style
+            numStyle: {
+                x: parseFloat(document.getElementById('numX').value) || 65,
+                y: parseFloat(document.getElementById('numY').value) || 1240,
+                rot: parseFloat(document.getElementById('numRot').value) || 0,
+                size: parseFloat(document.getElementById('numSize').value) || 55
+            },
+            // Position Style
+            posStyle: {
+                x: parseFloat(document.getElementById('posX').value) || 980,
+                y: parseFloat(document.getElementById('posY').value) || 1260,
+                rot: parseFloat(document.getElementById('posRot').value) || 0,
+                size: parseFloat(document.getElementById('posSize').value) || 50
             },
 
             pNumber: getVal('pNumber'),
@@ -174,6 +198,20 @@ window.UIHandler = {
             team: getVal('team'),
             teamColor: getVal('teamColor'),
             teamFont: getVal('teamFont'),
+
+            teamLogoData: {
+                x: parseFloat(document.getElementById('logoX').value) || 512,
+                y: parseFloat(document.getElementById('logoY').value) || 250,
+                scale: parseFloat(document.getElementById('logoScale').value) || 1.0,
+                rotation: (parseFloat(document.getElementById('logoRot').value) || 0) * (Math.PI / 180)
+            },
+
+            seasonLogoData: {
+                x: parseFloat(document.getElementById('seasonX')?.value) || 800,
+                y: parseFloat(document.getElementById('seasonY')?.value) || 200,
+                scale: parseFloat(document.getElementById('seasonScale')?.value) || 1.0,
+                rotation: (parseFloat(document.getElementById('seasonRot')?.value) || 0) * (Math.PI / 180)
+            },
 
             // Aesthetic Settings
             rarityTier: getVal('rarityTier'),

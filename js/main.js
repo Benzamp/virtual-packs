@@ -105,7 +105,8 @@ window.CardApp = {
         back: null,
         logo1: null,
         logo2: null,
-        teamLogo: null
+        teamLogo: null,
+        seasonLogo: null,
     },
     flakeOptions: [
         'broken-glass.jpg', 
@@ -146,7 +147,7 @@ window.CardApp = {
         loader.setCrossOrigin('anonymous');
 
         // Load Default Environment
-        this.envMap = loader.load('assets/environment-maps/room-envmap.jpg', (tex) => {
+        this.envMap = loader.load('assets/environment-maps/studio_small_09.jpg', (tex) => {
             tex.mapping = THREE.EquirectangularReflectionMapping;
             this.updateCard();
         });
@@ -163,18 +164,85 @@ window.CardApp = {
             this.updateCard();
         });
 
-        const ambient = new THREE.AmbientLight(0xffffff, 0.8);
-        this.scene.add(ambient);
+        window.CardApp.handleLogoUpload = (input) =>  {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        this.userImages.logoFront = img; // Store in userImages
+                        this.updateCard();
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        };
 
-        const pointLight = new THREE.PointLight(0xffffff, 0.8);
-        pointLight.position.set(5, 5, 10);
-        this.scene.add(pointLight);
+        this.cardstockBumpMap = loader.load('assets/textures/cardstock.jpg', (tex) => {
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            // Repeat 4x4 or 6x6 so the "weave" looks like fine cardstock grain
+            tex.repeat.set(5, 5); 
+        });
+
+        const ambient = new THREE.AmbientLight(0xffffff, 1.1);
+        this.scene.add(ambient);
 
         this.createFlakeDropdown();
         this.setupInteraction();
         this.updateCard(); 
         this.animate();
         window.addEventListener('resize', () => this.handleResize());
+    },
+
+    // Add to window.CardApp object
+    exportCardAsGif() {
+        const duration = 2; // seconds for the rotation animation
+        const framesPerSecond = 30; // GIF quality
+        const totalFrames = duration * framesPerSecond;
+        let currentFrame = 0;
+
+        // Show feedback to the user
+        alert("Starting GIF capture... Please wait. This may take a moment.");
+
+        // Initialize CCapture
+        const capturer = new CCapture({
+            format: 'gif',
+            workersPath: 'node_modules/ccapture.js/src/', // Adjust if you downloaded manually
+            verbose: true,
+            framerate: framesPerSecond,
+            timeLimit: duration,
+            // The canvas you are drawing the final card on (the visible one)
+            // You might need to make hidden-canvas-vp visible temporarily or
+            // ensure your main rendering canvas is accessible here.
+            // Assuming 'hidden-canvas-vp' is the final output canvas in the viewport.
+            canvas: document.getElementById('hidden-canvas-vp') 
+        });
+
+        // Start GSAP animation for rotation
+        const originalRotationY = this.cardMesh.rotation.y;
+        gsap.to(this.cardMesh.rotation, {
+            y: originalRotationY + Math.PI * 2, // Rotate 360 degrees
+            duration: duration,
+            ease: "none", // Linear rotation for a smooth loop
+            onStart: () => {
+                capturer.start(); // Start recording when animation begins
+            },
+            onUpdate: () => {
+                // This is crucial: Your main render loop needs to be called here
+                // to draw each frame of the animation into the canvas.
+                // If CardApp.updateCard() already triggers a render, that's fine.
+                // Otherwise, explicitly call your render function here.
+                this.renderer.render(this.scene, this.camera); // Or your equivalent
+                capturer.capture(this.renderer.domElement); // Capture the current frame
+            },
+            onComplete: () => {
+                capturer.stop(); // Stop recording
+                capturer.save(); // Prompt user to download GIF
+                this.cardMesh.rotation.y = originalRotationY; // Reset rotation
+                alert("GIF capture complete!");
+            }
+        });
     },
 
     createFlakeDropdown() {
@@ -283,9 +351,15 @@ window.CardApp = {
         const backMat = new THREE.MeshStandardMaterial({ 
             map: texB, 
             envMap: this.envMap,
-            roughness: 0.7, 
-            metalness: 0.1,
-            envMapIntensity: 0.5 
+            roughness: 0.9,          // Keeps it matte
+            metalness: 0.0, 
+            envMapIntensity: 0.1,
+            
+            // Applying your uploaded image here
+            bumpMap: this.cardstockBumpMap, 
+            // Keep this value low (0.005 to 0.02). 
+            // Higher values will make the card look like heavy concrete.
+            bumpScale: 0.015,         
         });
 
         const getMaterial = (tex, isHoloEnabled, isTransparent = false) => {
@@ -368,6 +442,30 @@ window.CardApp = {
         logo2Mesh.position.z = -0.052; 
         logo2Mesh.rotation.y = Math.PI;
         this.cardMesh.add(logo2Mesh);
+    },
+
+    generateNoiseTexture(size = 128) {
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const imageData = ctx.createImageData(size, size);
+        const data = imageData.data;
+
+        for (let i = 0; i < data.length; i += 4) {
+            // Generate a random grayscale value
+            const val = Math.random() * 255;
+            data[i] = val;     // R
+            data[i + 1] = val; // G
+            data[i + 2] = val; // B
+            data[i + 3] = 255; // A
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        // Repeat the noise so it looks like fine grain rather than big blobs
+        tex.repeat.set(4, 4); 
+        return tex;
     },
 
     animate() {
@@ -540,6 +638,95 @@ window.CardApp = {
                 });
             }
         }, { passive: false });
+    },
+
+    // Add to window.CardApp object
+    saveToVault() {
+        const formData = window.UIHandler.getFormData();
+        
+        // Helper to convert Image objects to Base64 strings
+        const getBase64 = (img) => {
+            if (!img) return null;
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            return canvas.toDataURL();
+        };
+
+        const cardRecord = {
+            id: Date.now(), // Unique ID for loading
+            timestamp: new Date().toLocaleString(),
+            data: formData,
+            images: {
+                layerBg: getBase64(this.userImages.layerBg),
+                layerPlayer: getBase64(this.userImages.layerPlayer),
+                layerBorder: getBase64(this.userImages.layerBorder),
+                layerLogo: getBase64(this.userImages.layerLogo),
+                back: getBase64(this.userImages.back),
+                teamLogo: getBase64(this.userImages.teamLogo)
+            }
+        };
+
+        // Get existing vault or start fresh
+        const vault = JSON.parse(localStorage.getItem('vsc_vault') || '[]');
+        vault.push(cardRecord);
+        localStorage.setItem('vsc_vault', JSON.stringify(vault));
+        
+        alert("Card saved to terminal vault!");
+    },
+
+    loadFromVault(recordId) {
+        const vault = JSON.parse(localStorage.getItem('vsc_vault') || '[]');
+        const record = vault.find(r => r.id === recordId);
+        if (!record) return;
+
+        // 1. Restore Images
+        Object.keys(record.images).forEach(key => {
+            if (record.images[key]) {
+                const img = new Image();
+                img.onload = () => {
+                    this.userImages[key] = img;
+                    this.updateCard(record.data); // Trigger 3D refresh
+                };
+                img.src = record.images[key];
+            }
+        });
+
+        // 2. Restore Form Inputs
+        this.applyDataToUI(record.data);
+        switchView('creator');
+    },
+
+    applyDataToUI(data) {
+        // Logic to set input.value = data.fieldName for every UI element
+        // This ensures the sliders match the loaded card
+        Object.keys(data).forEach(key => {
+            const el = document.getElementById(key);
+            if (el) el.value = data[key];
+        });
+    },
+
+    renderGallery() {
+        const gallery = document.getElementById('card-gallery');
+        const vault = JSON.parse(localStorage.getItem('vsc_vault') || '[]');
+        
+        gallery.innerHTML = vault.length ? '' : '<p>No cards found in vault.</p>';
+
+        vault.forEach(card => {
+            const item = document.createElement('div');
+            item.className = 'menu-btn'; // Reusing your existing CSS class
+            item.innerHTML = `
+                <span class="label">${card.data.fName} ${card.data.lName}</span>
+                <small>${card.timestamp}</small>
+                <button onclick="window.CardApp.loadFromVault(${card.id})" 
+                        style="margin-top:10px; background:#8b5cf6; color:white; border:none; padding:5px; border-radius:4px; cursor:pointer;">
+                    LOAD DATA
+                </button>
+            `;
+            gallery.appendChild(item);
+        });
     }
 };
 

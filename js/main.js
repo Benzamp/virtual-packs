@@ -98,7 +98,16 @@ window.CardApp = {
     envMap: null,
     flakeMap: null,
     isFlipped: false,
-    userImages: { front: null, back: null },
+    userImages: { 
+        layerBg: null, 
+        layerPlayer: null, 
+        layerBorder: null, 
+        back: null,
+        logo1: null,
+        logo2: null,
+        teamLogo: null,
+        seasonLogo: null,
+    },
     flakeOptions: [
         'broken-glass.jpg', 
         'flakes.jpg', 
@@ -111,8 +120,12 @@ window.CardApp = {
         'geometric.jpg',
         'geometric2.jpg',
         'retro.jpg',
-        'stained-glass.jpg'
+        'stained-glass.jpg',
+        'hogs-tiled.jpg'
     ],
+    rotationVelocity: { x: 0, y: 0 },
+    friction: 0.95,
+    isDragging: false,
 
     init() {
         const viewport = document.getElementById('viewport');
@@ -134,35 +147,46 @@ window.CardApp = {
         loader.setCrossOrigin('anonymous');
 
         // Load Default Environment
-        this.envMap = loader.load('assets/room-envmap.jpg', (tex) => {
+        this.envMap = loader.load('assets/environment-maps/studio_small_09.jpg', (tex) => {
             tex.mapping = THREE.EquirectangularReflectionMapping;
             this.updateCard();
         });
 
-        this.flakeMap = loader.load('assets/broken-glass.jpg', (tex) => {
+        this.flakeMap = loader.load('assets/foil-textures/broken-glass.jpg', (tex) => {
             const imageRatio = tex.image.width / tex.image.height;
 
-            // 1. Check if the image needs rotation to fit the vertical card better
             if (imageRatio > 1.0) {
                 tex.rotation = Math.PI / 2; 
                 tex.center.set(0.5, 0.5); 
             }
 
-            // 2. Set wrapping and repeat
             tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-            
-            // 3. Update the card now that the texture is ready
             this.updateCard();
         });
 
-        this.flakeMap.wrapS = this.flakeMap.wrapT = THREE.RepeatWrapping;
+        window.CardApp.handleLogoUpload = (input) =>  {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        this.userImages.logoFront = img; // Store in userImages
+                        this.updateCard();
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        };
 
-        const ambient = new THREE.AmbientLight(0xffffff, 0.8);
+        this.cardstockBumpMap = loader.load('assets/textures/cardstock.jpg', (tex) => {
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            // Repeat 4x4 or 6x6 so the "weave" looks like fine cardstock grain
+            tex.repeat.set(5, 5); 
+        });
+
+        const ambient = new THREE.AmbientLight(0xffffff, 1.1);
         this.scene.add(ambient);
-
-        const pointLight = new THREE.PointLight(0xffffff, 0.8);
-        pointLight.position.set(5, 5, 10); // Positioned to hit the card face
-        this.scene.add(pointLight);
 
         this.createFlakeDropdown();
         this.setupInteraction();
@@ -171,8 +195,61 @@ window.CardApp = {
         window.addEventListener('resize', () => this.handleResize());
     },
 
+    exportCardAsGif() {
+        // 1. Configuration
+        const duration = 2; 
+        const fps = 30;
+        const totalFrames = duration * fps;
+        
+        // Ensure we are capturing the Three.js canvas, not the 2D hidden canvases
+        const webglCanvas = this.renderer.domElement;
+
+        // 2. Initialize Capturer
+        // Note: Ensure ccapture.js and gif.js.mem are in your project
+        const capturer = new CCapture({
+            format: 'gif',
+            workersPath: 'js/libs/',
+            framerate: fps,
+            quality: 10 // Higher quality encoding
+        });
+
+        alert("Starting GIF capture. The card will rotate and a download will trigger once finished.");
+
+        const originalRotationY = this.cardMesh.rotation.y;
+        
+        // 3. Create a proxy object to handle the animation steps
+        let captureData = { frame: 0 };
+
+        // Use GSAP to animate a "frame counter" rather than time
+        // This forces every single frame to be rendered regardless of lag
+        gsap.to(captureData, {
+            frame: totalFrames,
+            duration: duration,
+            ease: "none",
+            onStart: () => {
+                capturer.start();
+            },
+            onUpdate: () => {
+                // Manually set rotation based on progress (0 to 1)
+                const progress = captureData.frame / totalFrames;
+                this.cardMesh.rotation.y = originalRotationY + (Math.PI * 2 * progress);
+                
+                // Render the frame
+                this.renderer.render(this.scene, this.camera);
+                
+                // Capture the WebGL canvas
+                capturer.capture(webglCanvas);
+            },
+            onComplete: () => {
+                capturer.stop();
+                capturer.save();
+                this.cardMesh.rotation.y = originalRotationY;
+                console.log("Capture Finished");
+            }
+        });
+    },
+
     createFlakeDropdown() {
-        // Looks for a div with ID 'ui-controls' in your HTML
         const container = document.getElementById('ui-controls'); 
         if (!container) return;
 
@@ -194,7 +271,7 @@ window.CardApp = {
         
         this.flakeOptions.forEach(fileName => {
             const option = document.createElement('option');
-            option.value = `assets/${fileName}`;
+            option.value = `assets/foil-textures/${fileName}`;
             option.innerText = fileName.replace('.jpg', '').toUpperCase();
             select.appendChild(option);
         });
@@ -210,8 +287,8 @@ window.CardApp = {
         const loader = new THREE.TextureLoader();
         loader.load(path, (tex) => {
             tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-            this.flakeMap = tex; // Update the global map
-            this.updateCard();   // Re-render the 3D card
+            this.flakeMap = tex;
+            this.updateCard();
         });
     },
 
@@ -226,22 +303,38 @@ window.CardApp = {
     updateCard(vaultData = null) {
         if (!window.CardApp || !window.CardRenderer) return;
         const data = vaultData || window.UIHandler.getFormData();
+
+        // 1. PERSIST ROTATION: Keep the card's orientation while editing
+        let currentRotation = { x: 0, y: 0, z: 0 };
+        if (this.cardMesh) {
+            currentRotation.x = this.cardMesh.rotation.x;
+            currentRotation.y = this.cardMesh.rotation.y;
+            currentRotation.z = this.cardMesh.rotation.z;
+        }
         
+        // 2. RENDER CANVASES: Update the 2D source graphics
         window.CardRenderer.renderFront(data, this.userImages);
         window.CardRenderer.renderBack(data, this.userImages);
 
-        const texF = new THREE.CanvasTexture(document.getElementById('hidden-canvas-front'));
-        const texB = new THREE.CanvasTexture(document.getElementById('hidden-canvas-back'));
-        const texP = new THREE.CanvasTexture(document.getElementById('hidden-canvas-player'));
-        const texBorder = new THREE.CanvasTexture(document.getElementById('hidden-canvas-border'));
+        // 3. TEXTURE EXTRACTION: Convert canvases to Three.js textures
+        const getCanvasTex = (id) => {
+            const el = document.getElementById(id);
+            if (!el) return null;
+            const tex = new THREE.CanvasTexture(el);
+            tex.flipY = true;
+            tex.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+            return tex;
+        };
 
-        const maxAnisotropy = this.renderer.capabilities.getMaxAnisotropy();
-        [texF, texB, texP, texBorder].forEach(t => {
-            t.flipY = true;
-            t.anisotropy = maxAnisotropy;
-            t.needsUpdate = true;
-        });
+        const texF = getCanvasTex('hidden-canvas-front');
+        const texB = getCanvasTex('hidden-canvas-back');
+        const texP = getCanvasTex('hidden-canvas-player');
+        const texBorder = getCanvasTex('hidden-canvas-border');
+        const texVP = getCanvasTex('hidden-canvas-vp');
+        const texLL = getCanvasTex('hidden-canvas-league');
+        const texTeamLogo = getCanvasTex('hidden-canvas-team-logo'); // NEW: Team Logo Foil source
 
+        // 4. CLEANUP: Dispose of old geometry/materials to prevent memory leaks
         if (this.cardMesh) {
             this.cardMesh.traverse((child) => {
                 if (child.isMesh) {
@@ -256,24 +349,24 @@ window.CardApp = {
             this.scene.remove(this.cardMesh);
         }
 
+        // 5. MATERIAL BUILDER: Helper for Standard vs Shader materials
         const sideMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
         
-        // BACK MATERIAL: Always uses environment map for subtle depth
         const backMat = new THREE.MeshStandardMaterial({ 
             map: texB, 
             envMap: this.envMap,
-            roughness: 0.7, 
-            metalness: 0.1,
-            envMapIntensity: 0.5 
+            roughness: 0.9,          // Keeps it matte
+            metalness: 0.0, 
+            envMapIntensity: 0.1,
+            
+            // Applying your uploaded image here
+            bumpMap: this.cardstockBumpMap, 
+            // Keep this value low (0.005 to 0.02). 
+            // Higher values will make the card look like heavy concrete.
+            bumpScale: 0.015,         
         });
 
-        /**
-         * Helper: Material Switcher
-         * Now applies environment mapping to both Shader and Standard materials
-         */
         const getMaterial = (tex, isHoloEnabled, isTransparent = false) => {
-            // Determine if this specific layer should be holographic
-            // Logic: If the user checked the specific layer holo OR if the master foil is on
             const shouldShowHolo = isHoloEnabled || data.isFoil || data.rarityTier === 'Legendary';
             
             if (shouldShowHolo) {
@@ -298,7 +391,6 @@ window.CardApp = {
                 });
             }
 
-            // Default Matte Material
             return new THREE.MeshStandardMaterial({ 
                 map: tex, 
                 envMap: this.envMap,
@@ -310,64 +402,488 @@ window.CardApp = {
             });
         };
 
-        // 1. Background
+        // 6. MESH ASSEMBLY
+        // Create the main card box
         const frontMat = getMaterial(texF, data.holoBg, false);
         this.cardMesh = new THREE.Mesh(
             new THREE.BoxGeometry(3.5, 5, 0.1), 
             [sideMat, sideMat, sideMat, sideMat, frontMat, backMat]
         );
+
+        // Re-apply the rotation captured at the start
+        this.cardMesh.rotation.set(currentRotation.x, currentRotation.y, currentRotation.z);
         this.scene.add(this.cardMesh);
 
-        // 2. Player
+        // --- FRONT OVERLAYS ---
+        // Player Overlay
         const pMat = getMaterial(texP, data.holoPlayer, true);
         const pMesh = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 5), pMat);
         pMesh.position.z = 0.051; 
         this.cardMesh.add(pMesh);
 
-        // 3. Border
+        // Border Overlay
         const bMat = getMaterial(texBorder, data.holoBorder, true);
         const bMesh = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 5), bMat);
         bMesh.position.z = 0.052; 
         this.cardMesh.add(bMesh);
+
+        // --- BACK OVERLAYS ---
+        // NEW: Team Logo Foil (Watermark style on back)
+        const tlMat = getMaterial(texTeamLogo, true, true); // Always foil, always transparent
+        const tlMesh = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 5), tlMat);
+        tlMesh.position.z = -0.0505; // Sit just behind the back face
+        tlMesh.rotation.y = Math.PI;
+        this.cardMesh.add(tlMesh);
+
+        // Back Logo 1 (Virtual Packs)
+        const logo1Mesh = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 5), getMaterial(texVP, data.isFoil, true));
+        logo1Mesh.position.z = -0.051; 
+        logo1Mesh.rotation.y = Math.PI;
+        this.cardMesh.add(logo1Mesh);
+
+        // Back Logo 2 (League)
+        const logo2Mesh = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 5), getMaterial(texLL, data.isFoil, true));
+        logo2Mesh.position.z = -0.052; 
+        logo2Mesh.rotation.y = Math.PI;
+        this.cardMesh.add(logo2Mesh);
+    },
+
+    generateNoiseTexture(size = 128) {
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const imageData = ctx.createImageData(size, size);
+        const data = imageData.data;
+
+        for (let i = 0; i < data.length; i += 4) {
+            // Generate a random grayscale value
+            const val = Math.random() * 255;
+            data[i] = val;     // R
+            data[i + 1] = val; // G
+            data[i + 2] = val; // B
+            data[i + 3] = 255; // A
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        // Repeat the noise so it looks like fine grain rather than big blobs
+        tex.repeat.set(4, 4); 
+        return tex;
     },
 
     animate() {
         requestAnimationFrame(() => this.animate());
         
-        const camPos = this.camera.position;
-
         if (this.cardMesh) {
-            // Update Background (Box Side 4)
-            if (this.cardMesh.material[4].type === 'ShaderMaterial') {
-                this.cardMesh.material[4].uniforms.uCameraPos.value.copy(camPos);
+            // 1. MOMENTUM LOGIC: Apply spin if not dragging
+            if (!this.isDragging) {
+                // Apply current velocity to rotation
+                this.cardMesh.rotation.x += this.rotationVelocity.x;
+                this.cardMesh.rotation.y += this.rotationVelocity.y;
+
+                // Decay the velocity over time (Friction)
+                // this.friction is typically 0.95 to 0.98
+                this.rotationVelocity.x *= this.friction;
+                this.rotationVelocity.y *= this.friction;
+
+                // Stop tiny movements to save performance
+                if (Math.abs(this.rotationVelocity.x) < 0.0001) this.rotationVelocity.x = 0;
+                if (Math.abs(this.rotationVelocity.y) < 0.0001) this.rotationVelocity.y = 0;
             }
-            
-            // Update Overlays (Children of cardMesh)
-            this.cardMesh.children.forEach(child => {
-                if (child.material && child.material.type === 'ShaderMaterial') {
-                    child.material.uniforms.uCameraPos.value.copy(camPos);
+
+            // 2. SHADER SYNC: Keep holographic highlights moving with view
+            if (this.camera) {
+                const camPos = this.camera.position;
+
+                // Sync main card face shader
+                if (this.cardMesh.material[4]?.type === 'ShaderMaterial') {
+                    this.cardMesh.material[4].uniforms.uCameraPos.value.copy(camPos);
                 }
-            });
+                
+                // Sync all overlay materials (Player, Border, etc.)
+                this.cardMesh.children.forEach(child => {
+                    if (child.material && child.material.type === 'ShaderMaterial') {
+                        child.material.uniforms.uCameraPos.value.copy(camPos);
+                    }
+                });
+
+                // 3. UI LOGIC: Toggle Reset View Button visibility
+                const resetBtn = document.getElementById('reset-view-btn');
+                if (resetBtn) {
+                    // Check for rotation (ignoring tiny fractional decimals)
+                    const isRotated = Math.abs(this.cardMesh.rotation.x) > 0.01 || 
+                                    Math.abs(this.cardMesh.rotation.y) > 0.01;
+                    // Check for zoom (default Z is 12)
+                    const isZoomed = Math.abs(this.camera.position.z - 12) > 0.1;
+                    // Check for pan (default X, Y are 0)
+                    const isPanned = Math.abs(this.camera.position.x) > 0.1 || 
+                                    Math.abs(this.camera.position.y) > 0.1;
+
+                    if (isRotated || isZoomed || isPanned) {
+                        resetBtn.classList.remove('hidden');
+                    } else {
+                        resetBtn.classList.add('hidden');
+                    }
+                }
+            }
         }
         
+        // 4. RENDER FRAME
         this.renderer.render(this.scene, this.camera);
     },
 
-    setupInteraction() {
-        let drag = false, prev = {x:0, y:0};
-        window.addEventListener('mousedown', (e) => { 
-            if (e.target.closest('#viewport')) {
-                drag = true; prev = {x:e.clientX, y:e.clientY}; 
+    flipCard() {
+        if (!this.cardMesh) return;
+        this.isFlipped = !this.isFlipped;
+        const targetY = this.isFlipped ? Math.PI : 0;
+        
+        gsap.to(this.cardMesh.rotation, {
+            y: targetY,
+            duration: 0.6,
+            ease: "back.out(1.2)"
+        });
+    },
+
+    resetView() {
+        if (!this.cardMesh || !this.camera) return;
+        
+        // Smoothly reset everything
+        gsap.to(this.cardMesh.rotation, { x: 0, y: 0, z: 0, duration: 0.8, ease: "power2.out" });
+        gsap.to(this.camera.position, { 
+            x: 0, 
+            y: 0, 
+            z: 12, 
+            duration: 0.8, 
+            ease: "power2.out",
+            onComplete: () => {
+                // Force hide the button just in case the animation loop hasn't caught it
+                document.getElementById('reset-view-btn')?.classList.add('hidden');
             }
         });
-        window.addEventListener('mouseup', () => drag = false);
-        window.addEventListener('mousemove', e => {
-            if (!drag || !this.cardMesh) return;
-            this.cardMesh.rotation.y += (e.clientX - prev.x) * 0.01;
-            this.cardMesh.rotation.x += (e.clientY - prev.y) * 0.01;
-            prev = {x:e.clientX, y:e.clientY};
+        this.isFlipped = false;
+    },
+
+
+    setupInteraction() {
+        let prev = { x: 0, y: 0 };
+        let pan = false;
+
+        // 1. Prevent context menu for right-click panning
+        window.addEventListener('contextmenu', (e) => {
+            if (e.target.closest('#viewport')) e.preventDefault();
+        });
+
+        // 2. Mousedown: Unified Left (Rotate) and Right (Pan) detection
+        window.addEventListener('mousedown', (e) => {
+            if (e.target.closest('#viewport')) {
+                if (e.button === 0) { // Left Click
+                    this.isDragging = true;
+                    this.rotationVelocity = { x: 0, y: 0 }; // Kill momentum while grabbing
+                }
+                if (e.button === 2) { // Right Click
+                    pan = true;
+                }
+                prev = { x: e.clientX, y: e.clientY };
+            }
+        });
+
+        // 3. Mouseup: Clear all states
+        window.addEventListener('mouseup', () => {
+            this.isDragging = false;
+            pan = false;
+        });
+
+        // 4. Mousemove: Handle Rotation OR Panning
+        window.addEventListener('mousemove', (e) => {
+            if (!this.cardMesh) return;
+            
+            const deltaX = e.clientX - prev.x;
+            const deltaY = e.clientY - prev.y;
+
+            if (this.isDragging) {
+                // MOMENTUM ROTATION: Direct update (no GSAP here to avoid lag)
+                this.rotationVelocity.y = deltaX * 0.015;
+                this.rotationVelocity.x = deltaY * 0.015;
+
+                this.cardMesh.rotation.y += this.rotationVelocity.y;
+                this.cardMesh.rotation.x += this.rotationVelocity.x;
+
+            } else if (pan) {
+                // PANNING: Smoothly move camera
+                gsap.to(this.camera.position, {
+                    x: this.camera.position.x - (deltaX * 0.01),
+                    y: this.camera.position.y + (deltaY * 0.01),
+                    duration: 0.5,
+                    ease: "power2.out"
+                });
+            }
+
+            prev = { x: e.clientX, y: e.clientY };
+        });
+
+        // 5. Wheel: Fast and Smooth Zoom
+        window.addEventListener('wheel', (e) => {
+            if (e.target.closest('#viewport')) {
+                e.preventDefault();
+
+                const speedMultiplier = 1.5; 
+                const delta = e.deltaY * speedMultiplier;
+                let targetZ = this.camera.position.z + (delta * 0.005);
+                
+                // Keep zoom within card bounds
+                targetZ = Math.min(Math.max(targetZ, 5), 18);
+
+                gsap.to(this.camera.position, {
+                    z: targetZ,
+                    duration: 0.4,
+                    ease: "power2.out",
+                    overwrite: "auto"
+                });
+            }
+        }, { passive: false });
+    },
+
+    // --- UPDATED SUPABASE SAVE LOGIC ---
+    async saveToVault() {
+        const formData = window.UIHandler.getFormData();
+        
+        // 1. Capture a thumbnail of the current 3D view to show in the gallery
+        this.renderer.render(this.scene, this.camera);
+        const blob = await new Promise(res => this.renderer.domElement.toBlob(res, 'image/webp', 0.8));
+        const fileName = `card_${Date.now()}.webp`;
+
+        try {
+            alert("Uploading to Supabase... please wait.");
+
+            // 2. Upload Thumbnail to Supabase Storage
+            const { data: storageData, error: storageError } = await window.supabase.storage
+                .from('card-thumbnails')
+                .upload(fileName, blob);
+
+            if (storageError) throw storageError;
+
+            // Get Public URL
+            const { data: urlData } = window.supabase.storage
+                .from('card-thumbnails')
+                .getPublicUrl(fileName);
+
+            // 3. Save "Recipe" to Database
+            const { error: dbError } = await window.supabase
+                .from('cards')
+                .insert([{
+                    fName: formData.fName,
+                    lName: formData.lName,
+                    team: formData.team,
+                    pPosition: formData.pPosition,
+                    stats: formData.stats,
+                    config: formData, // Save the whole object for reconstruction
+                    image_url: urlData.publicUrl
+                }]);
+
+            if (dbError) throw dbError;
+
+            alert("Card successfully synced to Cloud Vault!");
+        } catch (err) {
+            console.error(err);
+            alert("Error: " + err.message);
+        }
+    },
+
+    // --- UPDATED SUPABASE LOAD LOGIC ---
+    async loadFromVault(recordId) {
+        const { data: record, error } = await window.supabase
+            .from('cards')
+            .select('*')
+            .eq('id', recordId)
+            .single();
+
+        if (error || !record) return alert("Card not found");
+
+        // Restore Form Inputs (Sliders/Text)
+        this.applyDataToUI(record.config);
+        
+        // Since we aren't storing the high-res upload layers in the DB 
+        // (to save space), the user would re-upload their custom PNGs 
+        // or you could extend this to save those to storage buckets too.
+        
+        switchView('creator');
+        this.updateCard();
+    },
+
+    applyDataToUI(data) {
+        if (!data) return;
+        Object.keys(data).forEach(key => {
+            // Handle standard inputs
+            const el = document.getElementById(key);
+            if (el) {
+                el.value = data[key];
+                // Manually trigger the 'input' event so UI labels update
+                el.dispatchEvent(new Event('input'));
+            }
+            
+            // Handle nested objects like styles
+            if (typeof data[key] === 'object' && data[key] !== null) {
+                Object.keys(data[key]).forEach(subKey => {
+                    const subEl = document.getElementById(subKey);
+                    if (subEl) {
+                        subEl.value = data[key][subKey];
+                        subEl.dispatchEvent(new Event('input'));
+                    }
+                });
+            }
+        });
+    },
+
+    async renderGallery() {
+        const gallery = document.getElementById('card-gallery');
+        gallery.innerHTML = '<p>Fetching from cloud...</p>';
+
+        const { data: cards, error } = await window.supabase
+            .from('cards')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) return gallery.innerHTML = '<p>Error loading vault.</p>';
+        
+        gallery.innerHTML = cards.length ? '' : '<p>Your vault is empty.</p>';
+
+        cards.forEach(card => {
+            const item = document.createElement('div');
+            item.className = 'menu-btn';
+            item.style.height = "auto";
+            item.innerHTML = `
+                <img src="${card.image_url}" style="width:100%; border-radius:8px; margin-bottom:10px; border:1px solid #444;">
+                <span class="label">${card.fName} ${card.lName}</span>
+                <small>${card.team} | ${card.pPosition}</small>
+                <button onclick="window.CardApp.loadFromVault(${card.id})" 
+                        style="width:100%; margin-top:10px; background:#8b5cf6; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer; font-weight:bold;">
+                    LOAD DATA
+                </button>
+            `;
+            gallery.appendChild(item);
+        });
+    },
+
+    applyDataToUI(data) {
+        // Logic to set input.value = data.fieldName for every UI element
+        // This ensures the sliders match the loaded card
+        Object.keys(data).forEach(key => {
+            const el = document.getElementById(key);
+            if (el) el.value = data[key];
+        });
+    },
+
+    renderGallery() {
+        const gallery = document.getElementById('card-gallery');
+        const vault = JSON.parse(localStorage.getItem('vsc_vault') || '[]');
+        
+        gallery.innerHTML = vault.length ? '' : '<p>No cards found in vault.</p>';
+
+        vault.forEach(card => {
+            const item = document.createElement('div');
+            item.className = 'menu-btn'; // Reusing your existing CSS class
+            item.innerHTML = `
+                <span class="label">${card.data.fName} ${card.data.lName}</span>
+                <small>${card.timestamp}</small>
+                <button onclick="window.CardApp.loadFromVault(${card.id})" 
+                        style="margin-top:10px; background:#8b5cf6; color:white; border:none; padding:5px; border-radius:4px; cursor:pointer;">
+                    LOAD DATA
+                </button>
+            `;
+            gallery.appendChild(item);
         });
     }
 };
 
 window.addEventListener('load', () => window.CardApp.init());
+
+window.TeamColors = {
+    colors: {
+        color1: '#ff4444',
+        color2: '#44ff44',
+        color3: '#4444ff'
+    },
+
+    init() {
+        this.loadColors();
+        this.setupColorPickers();
+        this.setupButtons();
+    },
+
+    loadColors() {
+        const saved = localStorage.getItem('teamColors');
+        if (saved) {
+            this.colors = JSON.parse(saved);
+            this.applyColors();
+        }
+    },
+
+    applyColors() {
+        document.getElementById('color1').value = this.colors.color1;
+        document.getElementById('color2').value = this.colors.color2;
+        document.getElementById('color3').value = this.colors.color3;
+        document.getElementById('hex1').textContent = this.colors.color1;
+        document.getElementById('hex2').textContent = this.colors.color2;
+        document.getElementById('hex3').textContent = this.colors.color3;
+    },
+
+    setupColorPickers() {
+        ['color1', 'color2', 'color3'].forEach((id, index) => {
+            const colorInput = document.getElementById(id);
+            const hexDisplay = document.getElementById(`hex${index + 1}`);
+            
+            colorInput.addEventListener('input', (e) => {
+                hexDisplay.textContent = e.target.value;
+            });
+        });
+    },
+
+    setupButtons() {
+        const confirmBtn = document.getElementById('confirmColors');
+        const cancelBtn = document.getElementById('cancelColors');
+        
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', () => {
+                this.colors.color1 = document.getElementById('color1').value;
+                this.colors.color2 = document.getElementById('color2').value;
+                this.colors.color3 = document.getElementById('color3').value;
+                
+                localStorage.setItem('teamColors', JSON.stringify(this.colors));
+                this.showFeedback('Colors saved!');
+                
+                if (window.CardApp) {
+                    window.CardApp.updateCard();
+                }
+            });
+        }
+
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+                this.applyColors();
+                this.showFeedback('Changes cancelled');
+            });
+        }
+    },
+
+    showFeedback(message) {
+        const feedback = document.getElementById('colorFeedback');
+        if (feedback) {
+            feedback.textContent = message;
+            feedback.style.opacity = '1';
+            setTimeout(() => {
+                feedback.style.opacity = '0';
+            }, 2000);
+        }
+    },
+
+    getColors() {
+        return this.colors;
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (document.getElementById('color1')) {
+        window.TeamColors.init();
+    }
+});

@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VSC Terminal | Card Manager</title>
     <link rel="stylesheet" href="dist/style.min.css">
-
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Jersey+25&display=swap" rel="stylesheet">
 </head>
 <body>
 
@@ -44,7 +46,7 @@
                     <label>Player Details</label>
                     <input type="text" id="fName" placeholder="First Name" value="AMONTE">
                     <input type="text" id="lName" placeholder="Last Name" value="DUBOIS-SMITH">
-                    <input type="text" id="team" placeholder="Team Name" value="RIVERHOGS">
+                    
                     <div class="grid-controls">
                         <div>
                             <label style="font-size: 0.6rem; color: #64748b;">Number</label>
@@ -55,6 +57,112 @@
                             <input type="text" id="pPosition" placeholder="SS" value="SS">
                         </div>
                     </div>
+
+                    <input type="text" id="team" placeholder="Team Name" value="RIVERHOGS">
+
+                    <div class="section team-logo-section">
+                        <label>Team Logo Overlay</label>
+                        <input type="file" id="imgLayerLogo" accept="image/*" onchange="window.CardApp.updateCard()">
+                        
+                        <div class="transform-group" style="margin-top:10px;">
+                            <small style="color:var(--accent)">Logo Transform</small>
+                            <div class="grid-controls">
+                                <div>
+                                    <small>X</small>
+                                    <input type="number" id="logoX" value="325" oninput="window.CardApp.updateCard()">
+                                </div>
+                                <div>
+                                    <small>Y</small>
+                                    <input type="number" id="logoY" value="1088" oninput="window.CardApp.updateCard()">
+                                </div>
+                                <div>
+                                    <small>Scale</small>
+                                    <input type="number" id="logoScale" step="0.1" value="0.4" oninput="window.CardApp.updateCard()">
+                                </div>
+                                <div>
+                                    <small>Rot°</small>
+                                    <input type="number" id="logoRot" value="6.8" oninput="window.CardApp.updateCard()">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <label>Name Transformations</label>
+                        
+                        <div class="transform-group">
+                            <small style="color:var(--accent)">First Name Styling</small>
+                            <div class="grid-controls">
+                                <input type="number" id="fNameX" placeholder="X" value="480">
+                                <input type="number" id="fNameY" placeholder="Y" value="1200">
+                                <input type="number" id="fNameRot" placeholder="Rot°" value="0">
+                                <input type="number" id="fNameSize" placeholder="Size" value="40">
+                            </div>
+                            <select id="fNameFont">
+                                <option value="Bebas Neue">Bebas Neue</option>
+                                <option value="Jersey 25">Jersey 25</option>
+                                <option value="Impact">Impact</option>
+                                <option value="Arial">Arial</option>
+                            </select>
+                        </div>
+
+                        <div class="transform-group" style="margin-top:10px;">
+                            <small style="color:var(--accent)">Last Name Styling</small>
+                            <div class="grid-controls">
+                                <input type="number" id="lNameX" placeholder="X" value="480">
+                                <input type="number" id="lNameY" placeholder="Y" value="1260">
+                                <input type="number" id="lNameRot" placeholder="Rot°" value="0">
+                                <input type="number" id="lNameSize" placeholder="Size" value="60">
+                            </div>
+                            <select id="lNameFont">
+                                <option value="Bebas Neue">Bebas Neue</option>
+                                <option value="Jersey 25">Jersey 25</option>
+                                <option value="Impact">Impact</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="transform-group" style="margin-top:10px;">
+                        <small style="color:var(--accent)">Jersey # Styling</small>
+                        <div class="grid-controls">
+                            <div><small>X</small><input type="number" id="numX" value="65"></div>
+                            <div><small>Y</small><input type="number" id="numY" value="1240"></div>
+                            <div><small>Rot°</small><input type="number" id="numRot" value="0"></div>
+                            <div><small>Size</small><input type="number" id="numSize" value="55"></div>
+                        </div>
+                    </div>
+
+                    <div class="transform-group" style="margin-top:10px;">
+                        <small style="color:var(--accent)">Position Styling</small>
+                        <div class="grid-controls">
+                            <div><small>X</small><input type="number" id="posX" value="175"></div>
+                            <div><small>Y</small><input type="number" id="posY" value="1265"></div>
+                            <div><small>Rot°</small><input type="number" id="posRot" value="0"></div>
+                            <div><small>Size</small><input type="number" id="posSize" value="100"></div>
+                        </div>
+                    </div>
+
+                    <div class="team-color-section section">
+                        <label class="section-title">Team Colors</label>
+                        <div class="color-picker-group">
+                                <input type="color" id="color1" class="color-input" value="#ff4444">
+                                <span class="color-hex" id="hex1">#ff4444</span>
+
+                                <input type="color" id="color2" class="color-input" value="#44ff44">
+                                <span class="color-hex" id="hex2">#44ff44</span>
+
+                                <input type="color" id="color3" class="color-input" value="#4444ff">
+                                <span class="color-hex" id="hex3">#4444ff</span>
+
+                                <div class="color-buttons">
+                                    <button id="confirmColors" class="btn btn-primary">Confirm</button>
+                                    <button id="cancelColors" class="btn btn-flip">Cancel</button>
+                                </div>
+                        </div>
+                        
+                        <div id="colorFeedback" class="color-feedback"></div>
+                    </div>
+
                 </div>
 
                 <div class="section">
@@ -74,18 +182,19 @@
 
                     <label style="margin-top: 10px; font-size: 0.6rem; color: #64748b;">Foil Pattern</label>
                     <select id="flakeType" onchange="window.CardApp.changeFlakeTexture(this.value)">
-                        <option value="assets/broken-glass.jpg">BROKEN GLASS</option>
-                        <option value="assets/flakes.jpg">FLAKE</option>
-                        <option value="assets/gold.jpg">GOLD DUST</option>
-                        <option value="assets/oil.jpg">OIL SLICK</option>
-                        <option value="assets/shards.jpg">SHARDS</option>
-                        <option value="assets/fire.jpg">FIRE</option>
-                        <option value="assets/foil1.jpg">CLASSIC FOIL</option>
-                        <option value="assets/checkered.jpg">CHECKERED</option>
-                        <option value="assets/geometric.jpg">GEOMETRIC</option>
-                        <option value="assets/geometric2.jpg">GEOMETRIC2</option>
-                        <option value="assets/retro.jpg">RETRO</option>
-                        <option value="assets/stained-glass.jpg">STAINED GLASS</option>
+                        <option value="assets/foil-textures/broken-glass.jpg">BROKEN GLASS</option>
+                        <option value="assets/foil-textures/flakes.jpg">FLAKE</option>
+                        <option value="assets/foil-textures/gold.jpg">GOLD DUST</option>
+                        <option value="assets/foil-textures/oil.jpg">OIL SLICK</option>
+                        <option value="assets/foil-textures/shards.jpg">SHARDS</option>
+                        <option value="assets/foil-textures/fire.jpg">FIRE</option>
+                        <option value="assets/foil-textures/foil1.jpg">CLASSIC FOIL</option>
+                        <option value="assets/foil-textures/checkered.jpg">CHECKERED</option>
+                        <option value="assets/foil-textures/geometric.jpg">GEOMETRIC</option>
+                        <option value="assets/foil-textures/geometric2.jpg">GEOMETRIC2</option>
+                        <option value="assets/foil-textures/retro.jpg">RETRO</option>
+                        <option value="assets/foil-textures/stained-glass.jpg">STAINED GLASS</option>
+                        <option value="assets/foil-textures/hogs-tiled.jpg">HOGS TILED</option>
                     </select>
                     
                     <div style="margin-top: 10px; display: grid; grid-template-columns: 1fr; gap: 5px;">
@@ -116,20 +225,46 @@
                 <div class="section">
                     <label>Card Front</label>
                     
-                    <label style="font-size: 0.6rem; color: #64748b;">1. background</label>
+                    <label style="font-size: 0.6rem; color: #64748b;">1. Background</label>
                     <input type="file" id="imgLayerBg" accept="image/*" onchange="window.CardApp.updateCard()">
                     
                     <label style="font-size: 0.6rem; color: #64748b;">2. Player</label>
                     <input type="file" id="imgLayerPlayer" accept="image/*" onchange="window.CardApp.updateCard()">
                     
-                    <label style="font-size: 0.6rem; color: #64748b;">3. Carder Border</label>
+                    <label style="font-size: 0.6rem; color: #64748b;">3. Card Border</label>
                     <input type="file" id="imgLayerBorder" accept="image/*" onchange="window.CardApp.updateCard()">
+
+                    <label style="font-size: 0.6rem; color: #64748b;">4. Season Logo</label>
+                    <input type="file" id="imgLayerSeason" accept="image/*" onchange="window.CardApp.updateCard()">
+
+                    <div class="setting-group">
+                        <label>Season Logo X: <span id="valSeasonX">760</span></label>
+                        <input type="range" id="seasonX" min="0" max="1024" value="760">
+
+                        <label>Season Logo Y: <span id="valSeasonY">1340</span></label>
+                        <input type="range" id="seasonY" min="0" max="1480" value="1340">
+
+                        <label>Scale: <span id="valSeasonScale">0.5</span></label>
+                        <input type="range" id="seasonScale" min="0.1" max="3.0" step="0.1" value="0.5">
+
+                        <label>Rotation: <span id="valSeasonRot">0</span>°</label>
+                        <input type="range" id="seasonRot" min="0" max="360" value="0">
+                    </div>
 
                     <hr style="border: 0; border-top: 1px solid #1e293b; margin: 15px 0;">
 
                     <label>Card back</label>
                     <label style="font-size: 0.6rem; color: #64748b;">Card back Image</label>
                     <input type="file" id="imgBack" accept="image/*" onchange="window.CardApp.updateCard()">
+
+                    <label style="font-size: 0.6rem; color: #64748b;">Logo 1</label>
+                    <input type="file" id="logo1" accept="image/*" onchange="window.CardApp.updateCard()">
+
+                    <label style="font-size: 0.6rem; color: #64748b;">Logo 2</label>
+                    <input type="file" id="logo2" accept="image/*" onchange="window.CardApp.updateCard()">
+
+                    <label style="font-size: 0.6rem; color: #64748b;">Team Logo</label>
+                    <input type="file" id="teamLogo" accept="image/*" onchange="window.CardApp.updateCard()">
                 </div>
 
                 <div class="section">
@@ -160,14 +295,23 @@
                     <textarea id="quote" placeholder="Career Highlights..." rows="3">A standout strong safety known for his punishing hits and exceptional field vision. A cornerstone of the Riverhogs defense.</textarea>
                 </div>
 
-                <!-- TODO
                 <div class="section">
-                    <button class="btn btn-primary" onclick="window.CardApp.updateCard()">Update Preview</button>
                     <button class="btn btn-flip" onclick="window.CardApp.flipCard()">Flip Card</button>
+                    <button class="btn btn-primary" onclick="window.CardApp.exportCardAsGif()">Export GIF</button>
                 </div>
-                -->
+
             </div>
-            <div id="viewport"></div>
+            <div id="viewport">
+                <button id="reset-view-btn" class="hidden" 
+                        style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); 
+                            z-index: 10; background: rgba(15, 23, 42, 0.8); border: 1px solid #ef4444; 
+                            color: #ef4444; padding: 10px 20px; border-radius: 20px; cursor: pointer; 
+                            font-weight: bold; backdrop-filter: blur(5px); font-size: 0.8rem;
+                            transition: all 0.2s;"
+                        onclick="window.CardApp.resetView()">
+                    RESET VIEW ↺
+                </button>
+            </div>
         </div>
     </div>
 
@@ -200,9 +344,22 @@
     <canvas id="hidden-canvas-mask" width="1024" height="1480" style="display:none;"></canvas>
     <canvas id="hidden-canvas-player" width="1024" height="1480" style="display:none;"></canvas>
     <canvas id="hidden-canvas-border" width="1024" height="1480" style="display:none;"></canvas>
+    <canvas id="hidden-canvas-vp" width="1024" height="1480" style="display:none;"></canvas>
+    <canvas id="hidden-canvas-league" width="1024" height="1480" style="display:none;"></canvas>
+    <canvas id="hidden-canvas-team-logo" width="1024" height="1480" style="display:none;"></canvas>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://unpkg.com/ccapture.js@1.1.0/build/CCapture.all.min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script>
+        const SUPABASE_URL = 'https://your-project-id.supabase.co';
+        const SUPABASE_KEY = 'your-anon-public-key';
+        window.supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    </script>
+
     <script src="dist/bundle.min.js"></script>
 </body>
 </html>

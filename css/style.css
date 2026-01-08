@@ -47,7 +47,7 @@ body {
     width: 360px; 
     height: 100%;
     background: var(--panel-bg); 
-    back2drop-filter: blur(12px);
+    backdrop-filter: blur(12px);
     border-right: 1px solid var(--border); 
     padding: 24px; 
     box-sizing: border-box; 
@@ -77,7 +77,7 @@ body {
     padding: 50px; 
     border-radius: 20px; 
     border: 1px solid var(--border); 
-    back2drop-filter: blur(10px); 
+    backdrop-filter: blur(10px); 
 }
 
 .menu-grid { 
@@ -235,4 +235,119 @@ input:focus {
     font-family: 'Courier New', monospace;
     letter-spacing: 5px; 
     color: var(--accent);
+}
+
+/* 7. TEAM COLOR PICKER */
+.team-color-section {
+    background: rgba(255,255,255,0.03);
+    padding: 16px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.05);
+    margin-bottom: 24px;
+}
+
+.section-title {
+    display: block; 
+    font-size: 0.65rem; 
+    text-transform: uppercase; 
+    color: #facc15; 
+    margin-bottom: 12px; 
+    font-weight: 800; 
+    letter-spacing: 0.1em;
+}
+
+.color-picker-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.color-picker-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.color-label {
+    font-size: 0.85rem;
+    color: #cbd5e1;
+    font-weight: normal;
+    min-width: 70px;
+}
+
+.color-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+}
+
+.color-input {
+    width: 50px;
+    height: 32px;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    cursor: pointer;
+    background: transparent;
+    padding: 2px;
+    flex-shrink: 0;
+}
+
+.color-input::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.color-input::-webkit-color-swatch {
+    border: none;
+    border-radius: 6px;
+}
+
+.color-input::-moz-color-swatch {
+    border: none;
+    border-radius: 6px;
+}
+
+.color-input:hover {
+    border-color: #facc15;
+}
+
+.color-input:focus {
+    outline: none;
+    border-color: #facc15;
+    box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.2);
+}
+
+.color-hex {
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem;
+    color: #94a3b8;
+    min-width: 70px;
+}
+
+.color-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.color-buttons .btn {
+    margin-top: 0;
+    padding: 10px;
+    font-size: 0.75rem;
+}
+
+.color-feedback {
+    text-align: center;
+    margin-top: 12px;
+    font-size: 0.75rem;
+    color: #facc15;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+#reset-view-btn:hover {
+    background: #ef4444 !important;
+    color: white !important;
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
 }

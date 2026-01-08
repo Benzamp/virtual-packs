@@ -151,14 +151,25 @@ window.UIHandler = {
             
             // Global Identity Fields
             fName: getVal('fName'),
-            fNameColor: getVal('fNameColor'),
-            fNameFont: getVal('fNameFont'),
+            fNameStyle: {
+                x: getNum('fNameX'),
+                y: getNum('fNameY'),
+                rot: getNum('fNameRot'),
+                size: getNum('fNameSize'),
+                font: getVal('fNameFont')
+            },
+
             pNumber: getVal('pNumber'),
             pPosition: getVal('pPosition'),
             
             lName: getVal('lName'),
-            lNameColor: getVal('lNameColor'),
-            lNameFont: getVal('lNameFont'),
+            lNameStyle: {
+                x: getNum('lNameX'),
+                y: getNum('lNameY'),
+                rot: getNum('lNameRot'),
+                size: getNum('lNameSize'),
+                font: getVal('lNameFont')
+            },
             
             team: getVal('team'),
             teamColor: getVal('teamColor'),

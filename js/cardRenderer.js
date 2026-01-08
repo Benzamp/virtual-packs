@@ -42,37 +42,118 @@ window.CardRenderer = {
     },
 
     renderFront(data, userImages) {
-        // Get team colors
-        const teamColors = window.TeamColors ? window.TeamColors.getColors() : null;
-
+        const teamColors = window.TeamColors ? window.TeamColors.getColors() : { color1: '#fbbf24', color2: '#000000' };
         const canvas = document.getElementById('hidden-canvas-front');
-        const playerCanvas = document.getElementById('hidden-canvas-player');
-        const borderCanvas = document.getElementById('hidden-canvas-border');
+        const pCanvas = document.getElementById('hidden-canvas-player');
+        const bCanvas = document.getElementById('hidden-canvas-border');
 
         const ctx = canvas.getContext('2d');
-        const pCtx = playerCanvas.getContext('2d');
-        const bCtx = borderCanvas.getContext('2d');
+        const pCtx = pCanvas.getContext('2d');
+        const bCtx = bCanvas.getContext('2d');
         const w = 1024, h = 1480;
 
         [ctx, pCtx, bCtx].forEach(c => c.clearRect(0, 0, w, h));
 
-        // 1. BACKGROUND
+        // Inner Background (The "Card Face" inside the border)
         if (userImages.layerBg) {
             ctx.drawImage(userImages.layerBg, 0, 0, w, h);
         } else {
-            ctx.fillStyle = "#0f172a"; 
-            ctx.fillRect(0, 0, w, h);
+            ctx.fillStyle = "#1e293b"; 
+            ctx.fillRect(60, 60, w - 120, h - 120);
         }
 
-        // 2. PLAYER (Always draw to separate canvas for independent foiling)
+        // 2. DRAW PLAYER (Middle Layer)
         if (userImages.layerPlayer) {
             pCtx.drawImage(userImages.layerPlayer, 0, 0, w, h);
         }
 
-        // 3. BORDER (Always draw to separate canvas for independent foiling)
+        // 3. DRAW BORDER & BANNER ON TOP LAYER (bCtx)
+        const margin = 100;      
+        const gap = 14;         
+        const bannerY = h - 320;
+        const tilt = 55;
+
+        bCtx.save();
+
         if (userImages.layerBorder) {
+            // If you have a PNG border, draw it first
             bCtx.drawImage(userImages.layerBorder, 0, 0, w, h);
+        } else {
+            // If NO PNG exists, use the programmatic borders you built
+            // --- DRAW DOUBLE BORDERS ---
+            bCtx.strokeStyle = teamColors.color1;
+            bCtx.lineWidth = 14;
+            this.drawR(bCtx, margin, margin, w - (margin * 2), h - (margin * 2), 40, false, true);
+
+            bCtx.strokeStyle = teamColors.color3 || '#d2c4af';
+            bCtx.lineWidth = 8;
+            const innerM = margin + gap;
+            this.drawR(bCtx, innerM, innerM, w - (innerM * 2), h - (innerM * 2), 30, false, true);
         }
+        
+        // --- DRAW DOUBLE BORDERS ---
+        bCtx.strokeStyle = teamColors.color1;
+        bCtx.lineWidth = 14;
+        this.drawR(bCtx, margin, margin, w - (margin * 2), h - (margin * 2), 40, false, true);
+
+        bCtx.strokeStyle = teamColors.color3;
+        bCtx.lineWidth = 8;
+        const innerM = margin + gap;
+        this.drawR(bCtx, innerM, innerM, w - (innerM * 2), h - (innerM * 2), 30, false, true);
+
+        // --- DRAW THE BANNER SHAPE ---
+        bCtx.beginPath();
+        bCtx.moveTo(margin - 20, bannerY); 
+        bCtx.lineTo(w - margin + 20, bannerY - tilt); 
+        bCtx.lineTo(w - margin + 20, bannerY + 160 - tilt);
+        bCtx.lineTo(margin - 20, bannerY + 160);
+        bCtx.closePath();
+
+        // Fill Banner (Dark background for text)
+        bCtx.fillStyle = teamColors.color2;
+        bCtx.shadowBlur = 15;
+        bCtx.shadowColor = "black";
+        bCtx.fill();
+        
+        // Banner Stroke
+        bCtx.shadowBlur = 0;
+        bCtx.strokeStyle = teamColors.color1;
+        bCtx.lineWidth = 6;
+        bCtx.stroke();
+        
+        bCtx.restore();
+
+        // 4. DRAW TEXT ON TOP OF BANNER
+        // We draw this on bCtx so it is definitely on top of the banner shape
+        const drawBannerText = (text, style) => {
+            if (!text) return;
+            bCtx.save();
+            
+            // Calculate tilt angle in radians (approx -3.5 degrees)
+            const angle = Math.atan2(-tilt, w - (margin * 2));
+            
+            // Move to the banner area
+            bCtx.translate(style.x, style.y);
+            bCtx.rotate(angle); 
+            
+            // Text Style
+            bCtx.fillStyle = "#FFFFFF"; 
+            bCtx.font = `bold ${style.size}px "${style.font || 'Bebas Neue'}", sans-serif`;
+            bCtx.textAlign = 'left';
+            
+            // Optional: Add thin stroke to text for pop
+            bCtx.strokeStyle = "black";
+            bCtx.lineWidth = 2;
+            bCtx.strokeText(text.toUpperCase(), 0, 0);
+            bCtx.fillText(text.toUpperCase(), 0, 0);
+            
+            bCtx.restore();
+        };
+
+        // Position names inside the banner
+        // You might need to adjust these Y values in your data object to ~1250-1300
+        drawBannerText(data.fName, data.fNameStyle);
+        drawBannerText(data.lName, data.lNameStyle);
     },
 
     renderBack(data, userImages) {

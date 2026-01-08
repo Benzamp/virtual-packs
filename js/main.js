@@ -841,7 +841,6 @@ window.CardApp = {
                 item.innerHTML = `
                     <div style="margin-bottom: 10px; position: relative; min-height: 100px; background: #222;">
                         <img src="${card.image_url}" 
-                            onerror="this.src='assets/placeholder.png'; this.style.opacity='0.5';"
                             style="width: 100%; border-radius: 4px; border: 1px solid #444; display: block;">
                     </div>
                     <span class="label" style="display: block; font-weight: bold;">${card.cardName || 'Unnamed'}</span>

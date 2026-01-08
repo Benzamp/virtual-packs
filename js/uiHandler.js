@@ -69,8 +69,6 @@ window.UIHandler = {
      * Initializes listeners for file uploads and live-updates for all inputs
      */
     init() {
-        console.log("VSC UIHandler: Terminal Interface Linked.");
-        
         // Bind the three Front Layers
         this.bindFileUpload('imgLayerBg', 'layerBg');
         this.bindFileUpload('imgLayerPlayer', 'layerPlayer');
@@ -141,7 +139,7 @@ window.UIHandler = {
         
         // Serial Logic for Previewing
         const currentCount = parseInt(localStorage.getItem('vsc_counter') || '0');
-        const previewSerial = `VSC-${currentCount + 1}`;
+        const previewSerial = `VP-${currentCount + 1}`;
 
         // Update numerical labels for nickname sliders in the UI
         ['X', 'Y', 'Rot', 'Scale'].forEach(s => {

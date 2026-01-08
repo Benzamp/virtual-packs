@@ -78,6 +78,20 @@ window.UIHandler = {
         
         // Bind Back Image
         this.bindFileUpload('imgBack', 'back');
+
+        // Bind Logo 1
+        this.bindFileUpload('logo1', 'logo1');
+
+        // Bind Logo 2
+        this.bindFileUpload('logo2', 'logo2');
+
+        // Bind Team Logo
+        this.bindFileUpload('teamLogo', 'teamLogo');
+
+        this.bindFileUpload('imgLayerLogo', 'layerLogo');
+
+        // Bind Season Logo
+        this.bindFileUpload('imgLayerSeason', 'seasonLogo');
         
         ['input', 'change'].forEach(eventType => {
             document.addEventListener(eventType, (e) => {
@@ -102,7 +116,10 @@ window.UIHandler = {
             reader.onload = ev => {
                 const img = new Image();
                 img.onload = () => {
-                    window.CardApp.userImages[key] = img;
+                    // This ensures we are only updating ONE key (e.g., 'logo1') 
+                    // and not wiping out the others (e.g., 'back')
+                    window.CardApp.userImages[key] = img; 
+                    console.log(`Uploaded ${key}:`, window.CardApp.userImages);
                     window.CardApp.updateCard();
                 };
                 img.src = ev.target.result;
@@ -131,6 +148,10 @@ window.UIHandler = {
             const label = document.getElementById(`val${s}`);
             const input = document.getElementById(`nick${s}`);
             if (label && input) label.innerText = input.value;
+
+            const sLabel = document.getElementById(`valSeason${s}`);
+            const sInput = document.getElementById(`season${s}`);
+            if (sLabel && sInput) sLabel.innerText = sInput.value;
         });
 
         return {
@@ -139,26 +160,67 @@ window.UIHandler = {
             
             // Global Identity Fields
             fName: getVal('fName'),
-            fNameColor: getVal('fNameColor'),
-            fNameFont: getVal('fNameFont'),
+            fNameStyle: {
+                x: getNum('fNameX'),
+                y: getNum('fNameY'),
+                rot: getNum('fNameRot'),
+                size: getNum('fNameSize'),
+                font: getVal('fNameFont')
+            },
+
+            // Jersey Number Style
+            numStyle: {
+                x: parseFloat(document.getElementById('numX').value) || 65,
+                y: parseFloat(document.getElementById('numY').value) || 1240,
+                rot: parseFloat(document.getElementById('numRot').value) || 0,
+                size: parseFloat(document.getElementById('numSize').value) || 55
+            },
+            // Position Style
+            posStyle: {
+                x: parseFloat(document.getElementById('posX').value) || 980,
+                y: parseFloat(document.getElementById('posY').value) || 1260,
+                rot: parseFloat(document.getElementById('posRot').value) || 0,
+                size: parseFloat(document.getElementById('posSize').value) || 50
+            },
+
+            pNumber: getVal('pNumber'),
+            pPosition: getVal('pPosition'),
             
             lName: getVal('lName'),
-            lNameColor: getVal('lNameColor'),
-            lNameFont: getVal('lNameFont'),
+            lNameStyle: {
+                x: getNum('lNameX'),
+                y: getNum('lNameY'),
+                rot: getNum('lNameRot'),
+                size: getNum('lNameSize'),
+                font: getVal('lNameFont')
+            },
             
             team: getVal('team'),
             teamColor: getVal('teamColor'),
             teamFont: getVal('teamFont'),
+
+            teamLogoData: {
+                x: parseFloat(document.getElementById('logoX').value) || 512,
+                y: parseFloat(document.getElementById('logoY').value) || 250,
+                scale: parseFloat(document.getElementById('logoScale').value) || 1.0,
+                rotation: (parseFloat(document.getElementById('logoRot').value) || 0) * (Math.PI / 180)
+            },
+
+            seasonLogoData: {
+                x: parseFloat(document.getElementById('seasonX')?.value) || 800,
+                y: parseFloat(document.getElementById('seasonY')?.value) || 200,
+                scale: parseFloat(document.getElementById('seasonScale')?.value) || 1.0,
+                rotation: (parseFloat(document.getElementById('seasonRot')?.value) || 0) * (Math.PI / 180)
+            },
 
             // Aesthetic Settings
             rarityTier: getVal('rarityTier'),
             themeColor: getVal('themeColor'),
             isFoil: getChecked('isFoil'),
 
-            holoBg: document.getElementById('holoBg').checked,
-            holoPlayer: document.getElementById('holoPlayer').checked,
-            holoBorder: document.getElementById('holoBorder').checked,
-
+            holoBg: document.getElementById('holoBg')?.checked || false,
+            holoPlayer: document.getElementById('holoPlayer')?.checked || false,
+            holoBorder: document.getElementById('holoBorder')?.checked || false,
 
             // Back Side Customization
             backColor: getVal('backColor'),

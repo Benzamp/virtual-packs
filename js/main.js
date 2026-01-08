@@ -195,52 +195,56 @@ window.CardApp = {
         window.addEventListener('resize', () => this.handleResize());
     },
 
-    // Add to window.CardApp object
     exportCardAsGif() {
-        const duration = 2; // seconds for the rotation animation
-        const framesPerSecond = 30; // GIF quality
-        const totalFrames = duration * framesPerSecond;
-        let currentFrame = 0;
+        // 1. Configuration
+        const duration = 2; 
+        const fps = 30;
+        const totalFrames = duration * fps;
+        
+        // Ensure we are capturing the Three.js canvas, not the 2D hidden canvases
+        const webglCanvas = this.renderer.domElement;
 
-        // Show feedback to the user
-        alert("Starting GIF capture... Please wait. This may take a moment.");
-
-        // Initialize CCapture
+        // 2. Initialize Capturer
+        // Note: Ensure ccapture.js and gif.js.mem are in your project
         const capturer = new CCapture({
             format: 'gif',
-            workersPath: 'node_modules/ccapture.js/src/', // Adjust if you downloaded manually
-            verbose: true,
-            framerate: framesPerSecond,
-            timeLimit: duration,
-            // The canvas you are drawing the final card on (the visible one)
-            // You might need to make hidden-canvas-vp visible temporarily or
-            // ensure your main rendering canvas is accessible here.
-            // Assuming 'hidden-canvas-vp' is the final output canvas in the viewport.
-            canvas: document.getElementById('hidden-canvas-vp') 
+            workersPath: 'js/libs/',
+            framerate: fps,
+            quality: 10 // Higher quality encoding
         });
 
-        // Start GSAP animation for rotation
+        alert("Starting GIF capture. The card will rotate and a download will trigger once finished.");
+
         const originalRotationY = this.cardMesh.rotation.y;
-        gsap.to(this.cardMesh.rotation, {
-            y: originalRotationY + Math.PI * 2, // Rotate 360 degrees
+        
+        // 3. Create a proxy object to handle the animation steps
+        let captureData = { frame: 0 };
+
+        // Use GSAP to animate a "frame counter" rather than time
+        // This forces every single frame to be rendered regardless of lag
+        gsap.to(captureData, {
+            frame: totalFrames,
             duration: duration,
-            ease: "none", // Linear rotation for a smooth loop
+            ease: "none",
             onStart: () => {
-                capturer.start(); // Start recording when animation begins
+                capturer.start();
             },
             onUpdate: () => {
-                // This is crucial: Your main render loop needs to be called here
-                // to draw each frame of the animation into the canvas.
-                // If CardApp.updateCard() already triggers a render, that's fine.
-                // Otherwise, explicitly call your render function here.
-                this.renderer.render(this.scene, this.camera); // Or your equivalent
-                capturer.capture(this.renderer.domElement); // Capture the current frame
+                // Manually set rotation based on progress (0 to 1)
+                const progress = captureData.frame / totalFrames;
+                this.cardMesh.rotation.y = originalRotationY + (Math.PI * 2 * progress);
+                
+                // Render the frame
+                this.renderer.render(this.scene, this.camera);
+                
+                // Capture the WebGL canvas
+                capturer.capture(webglCanvas);
             },
             onComplete: () => {
-                capturer.stop(); // Stop recording
-                capturer.save(); // Prompt user to download GIF
-                this.cardMesh.rotation.y = originalRotationY; // Reset rotation
-                alert("GIF capture complete!");
+                capturer.stop();
+                capturer.save();
+                this.cardMesh.rotation.y = originalRotationY;
+                console.log("Capture Finished");
             }
         });
     },
@@ -640,63 +644,125 @@ window.CardApp = {
         }, { passive: false });
     },
 
-    // Add to window.CardApp object
-    saveToVault() {
+    // --- UPDATED SUPABASE SAVE LOGIC ---
+    async saveToVault() {
         const formData = window.UIHandler.getFormData();
         
-        // Helper to convert Image objects to Base64 strings
-        const getBase64 = (img) => {
-            if (!img) return null;
-            const canvas = document.createElement('canvas');
-            canvas.width = img.width;
-            canvas.height = img.height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0);
-            return canvas.toDataURL();
-        };
+        // 1. Capture a thumbnail of the current 3D view to show in the gallery
+        this.renderer.render(this.scene, this.camera);
+        const blob = await new Promise(res => this.renderer.domElement.toBlob(res, 'image/webp', 0.8));
+        const fileName = `card_${Date.now()}.webp`;
 
-        const cardRecord = {
-            id: Date.now(), // Unique ID for loading
-            timestamp: new Date().toLocaleString(),
-            data: formData,
-            images: {
-                layerBg: getBase64(this.userImages.layerBg),
-                layerPlayer: getBase64(this.userImages.layerPlayer),
-                layerBorder: getBase64(this.userImages.layerBorder),
-                layerLogo: getBase64(this.userImages.layerLogo),
-                back: getBase64(this.userImages.back),
-                teamLogo: getBase64(this.userImages.teamLogo)
-            }
-        };
+        try {
+            alert("Uploading to Supabase... please wait.");
 
-        // Get existing vault or start fresh
-        const vault = JSON.parse(localStorage.getItem('vsc_vault') || '[]');
-        vault.push(cardRecord);
-        localStorage.setItem('vsc_vault', JSON.stringify(vault));
-        
-        alert("Card saved to terminal vault!");
+            // 2. Upload Thumbnail to Supabase Storage
+            const { data: storageData, error: storageError } = await window.supabase.storage
+                .from('card-thumbnails')
+                .upload(fileName, blob);
+
+            if (storageError) throw storageError;
+
+            // Get Public URL
+            const { data: urlData } = window.supabase.storage
+                .from('card-thumbnails')
+                .getPublicUrl(fileName);
+
+            // 3. Save "Recipe" to Database
+            const { error: dbError } = await window.supabase
+                .from('cards')
+                .insert([{
+                    fName: formData.fName,
+                    lName: formData.lName,
+                    team: formData.team,
+                    pPosition: formData.pPosition,
+                    stats: formData.stats,
+                    config: formData, // Save the whole object for reconstruction
+                    image_url: urlData.publicUrl
+                }]);
+
+            if (dbError) throw dbError;
+
+            alert("Card successfully synced to Cloud Vault!");
+        } catch (err) {
+            console.error(err);
+            alert("Error: " + err.message);
+        }
     },
 
-    loadFromVault(recordId) {
-        const vault = JSON.parse(localStorage.getItem('vsc_vault') || '[]');
-        const record = vault.find(r => r.id === recordId);
-        if (!record) return;
+    // --- UPDATED SUPABASE LOAD LOGIC ---
+    async loadFromVault(recordId) {
+        const { data: record, error } = await window.supabase
+            .from('cards')
+            .select('*')
+            .eq('id', recordId)
+            .single();
 
-        // 1. Restore Images
-        Object.keys(record.images).forEach(key => {
-            if (record.images[key]) {
-                const img = new Image();
-                img.onload = () => {
-                    this.userImages[key] = img;
-                    this.updateCard(record.data); // Trigger 3D refresh
-                };
-                img.src = record.images[key];
+        if (error || !record) return alert("Card not found");
+
+        // Restore Form Inputs (Sliders/Text)
+        this.applyDataToUI(record.config);
+        
+        // Since we aren't storing the high-res upload layers in the DB 
+        // (to save space), the user would re-upload their custom PNGs 
+        // or you could extend this to save those to storage buckets too.
+        
+        switchView('creator');
+        this.updateCard();
+    },
+
+    applyDataToUI(data) {
+        if (!data) return;
+        Object.keys(data).forEach(key => {
+            // Handle standard inputs
+            const el = document.getElementById(key);
+            if (el) {
+                el.value = data[key];
+                // Manually trigger the 'input' event so UI labels update
+                el.dispatchEvent(new Event('input'));
+            }
+            
+            // Handle nested objects like styles
+            if (typeof data[key] === 'object' && data[key] !== null) {
+                Object.keys(data[key]).forEach(subKey => {
+                    const subEl = document.getElementById(subKey);
+                    if (subEl) {
+                        subEl.value = data[key][subKey];
+                        subEl.dispatchEvent(new Event('input'));
+                    }
+                });
             }
         });
+    },
 
-        // 2. Restore Form Inputs
-        this.applyDataToUI(record.data);
-        switchView('creator');
+    async renderGallery() {
+        const gallery = document.getElementById('card-gallery');
+        gallery.innerHTML = '<p>Fetching from cloud...</p>';
+
+        const { data: cards, error } = await window.supabase
+            .from('cards')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) return gallery.innerHTML = '<p>Error loading vault.</p>';
+        
+        gallery.innerHTML = cards.length ? '' : '<p>Your vault is empty.</p>';
+
+        cards.forEach(card => {
+            const item = document.createElement('div');
+            item.className = 'menu-btn';
+            item.style.height = "auto";
+            item.innerHTML = `
+                <img src="${card.image_url}" style="width:100%; border-radius:8px; margin-bottom:10px; border:1px solid #444;">
+                <span class="label">${card.fName} ${card.lName}</span>
+                <small>${card.team} | ${card.pPosition}</small>
+                <button onclick="window.CardApp.loadFromVault(${card.id})" 
+                        style="width:100%; margin-top:10px; background:#8b5cf6; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer; font-weight:bold;">
+                    LOAD DATA
+                </button>
+            `;
+            gallery.appendChild(item);
+        });
     },
 
     applyDataToUI(data) {

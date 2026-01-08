@@ -740,35 +740,22 @@ window.CardApp = {
     },
 
     async loadFromVault(recordId) {
-        console.log("Attempting to load card with ID:", recordId);
+        const { data: record, error } = await window.supabase
+            .from('cards')
+            .select('*')
+            .eq('id', recordId)
+            .single(); //
 
-        if (!recordId || recordId === 'undefined') {
-            return alert("Error: Invalid Card ID. Please try refreshing the gallery.");
-        }
-
-        try {
-            const { data: record, error } = await window.supabase
-                .from('cards')
-                .select('*')
-                .eq('id', recordId) // Ensure your DB column is actually named 'id'
-                .single();
-
-            if (error || !record) {
-                console.error("Supabase Error:", error);
-                return alert("Card not found in the cloud vault.");
-            }
-
-            // Apply the saved configuration to the UI
-            if (record.config) {
-                this.applyDataToUI(record.config);
-                this.updateCard();
-                if (typeof switchView === 'function') switchView('creator');
-            } else {
-                alert("This card has no configuration data saved.");
-            }
-
-        } catch (err) {
-            console.error("Critical Load Error:", err);
+        if (record && record.config) {
+            // Pass the master backup object to the UI restorer
+            this.applyDataToUI(record.config); 
+            
+            // Final refresh of the 3D scene
+            this.updateCard(); 
+            
+            if (typeof switchView === 'function') switchView('creator');
+        } else {
+            alert("Could not find configuration for this card.");
         }
     },
 

@@ -774,34 +774,30 @@ window.CardApp = {
 
     applyDataToUI(data) {
         if (!data) return;
-        Object.keys(data).forEach(key => {
-            // Handle standard inputs
-            const el = document.getElementById(key);
-            if (el) {
-                el.value = data[key];
-                // Manually trigger the 'input' event so UI labels update
-                el.dispatchEvent(new Event('input'));
-            }
-            
-            // Handle nested objects like styles
-            if (typeof data[key] === 'object' && data[key] !== null) {
-                Object.keys(data[key]).forEach(subKey => {
-                    const subEl = document.getElementById(subKey);
-                    if (subEl) {
-                        subEl.value = data[key][subKey];
-                        subEl.dispatchEvent(new Event('input'));
-                    }
-                });
-            }
-        });
-    },
 
-    applyDataToUI(data) {
-        // Logic to set input.value = data.fieldName for every UI element
-        // This ensures the sliders match the loaded card
+        // Helper to update an element and trigger its event
+        const updateElement = (id, value) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.value = value;
+                el.dispatchEvent(new Event('input')); // Forces the 3D card to update
+            }
+        };
+
+        // Loop through every key in the saved config
         Object.keys(data).forEach(key => {
-            const el = document.getElementById(key);
-            if (el) el.value = data[key];
+            const value = data[key];
+
+            if (typeof value === 'object' && value !== null) {
+                // It's a nested object (like fNameStyle or stats), loop through its sub-keys
+                Object.keys(value).forEach(subKey => {
+                    // Many UI IDs match the subKey (e.g., 'fNameX', 'spd')
+                    updateElement(subKey, value[subKey]);
+                });
+            } else {
+                // It's a top-level value (like fName, team, rarityTier)
+                updateElement(key, value);
+            }
         });
     },
 
@@ -834,20 +830,19 @@ window.CardApp = {
                 const item = document.createElement('div');
                 item.className = 'menu-btn';
                 item.style.height = 'auto';
-                
-                // Safety check for ID - log it to see if it's missing in the DB
-                if (!card.id) console.error("Database record missing ID for:", card.cardName);
 
                 item.innerHTML = `
-                    <div style="margin-bottom: 10px; position: relative; min-height: 100px; background: #222;">
-                        <img src="${card.image_url}" 
-                            style="width: 100%; border-radius: 4px; border: 1px solid #444; display: block;">
+                    <div style="margin-bottom: 10px;">
+                        <img src="${card.image_url}" onerror="this.src='assets/placeholder.png'" style="width: 100%; border-radius: 4px; border: 1px solid #444;">
                     </div>
-                    <span class="label" style="display: block; font-weight: bold;">${card.cardName || 'Unnamed'}</span>
-                    <small style="color: #aaa;">Season: ${card.cardSeason} | ${card.team}</small>
+                    <span class="label" style="display: block; font-weight: bold;">${card.cardName}</span>
+                    <div style="color: #aaa; font-size: 0.85em; line-height: 1.4;">
+                        <div>${card.team} | ${card.pPosition}</div>
+                        <div style="color: #8b5cf6; font-weight: bold;">SEASON: ${card.cardSeason}</div>
+                    </div>
                     
                     <button onclick="window.CardApp.loadFromVault('${card.id}')" 
-                            style="width: 100%; margin-top: 10px; background: #8b5cf6; color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                            style="width: 100%; margin-top: 12px; background: #8b5cf6; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: bold;">
                         LOAD DATA
                     </button>
                 `;

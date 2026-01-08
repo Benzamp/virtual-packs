@@ -13,22 +13,24 @@
 <body>
 
     <div id="view-home" class="screen-center">
-        <img src="assets/logos/virtual-packs-logo.png" alt="VP Logo" height="200" width="200" class="crt-logo">
-        <div class="menu-card">
-            <p style="color: #94a3b8;">CARD MANAGER</p>
-            <div class="menu-grid">
-                <div class="menu-btn" onclick="switchView('creator')">
-                    <span class="icon">🎴</span>
-                    <span class="label">STUDIO</span>
-                </div>
-                <div class="menu-btn" onclick="switchView('vault')">
-                    <span class="icon">📂</span>
-                    <span class="label">VAULT</span>
-                </div>
-                <div class="menu-btn disabled">
-                    <span class="icon">📦</span>
-                    <span class="label">PACKS</span>
-                    <small>LOCKED</small>
+        <div class="home-content">
+            <img src="assets/logos/virtual-packs-logo.png" alt="VP Logo" height="200" width="200" class="crt-logo">
+            <div class="menu-card">
+                <p style="color: #94a3b8;">CARD MANAGER</p>
+                <div class="menu-grid">
+                    <div class="menu-btn" onclick="switchView('creator')">
+                        <span class="icon">🎴</span>
+                        <span class="label">STUDIO</span>
+                    </div>
+                    <div class="menu-btn" onclick="switchView('vault')">
+                        <span class="icon">📂</span>
+                        <span class="label">VAULT</span>
+                    </div>
+                    <div class="menu-btn disabled">
+                        <span class="icon">📦</span>
+                        <span class="label">PACKS</span>
+                        <small>LOCKED</small>
+                    </div>
                 </div>
             </div>
         </div>
@@ -38,8 +40,16 @@
         <div class="top-nav">
             <button class="nav-back" onclick="switchView('home')">← TERMINAL</button>
             <h2 style="font-size: 1rem;">CARD CREATOR</h2>
-            <button class="nav-back" style="margin-left:auto; border-color:#8b5cf6; color:#8b5cf6;" onclick="window.CardApp.saveToVault()">SAVE TO VAULT</button>
-        </div>
+            <div style="margin-left:auto; display:flex; gap:10px;">
+                <button id="update-vault-btn" class="nav-back hidden" 
+                        style="border-color:#fbbf24; color:#fbbf24;" 
+                        onclick="window.CardApp.updateExistingCard()">UPDATE CLOUD</button>
+                
+                <button class="nav-back" style="border-color:#ce2c24; color:#ce2c24;" 
+                        onclick="window.CardApp.saveToVault()">SAVE NEW</button>
+            </div>
+        </div>  
+
         <div class="app-container">
             <div class="sidebar">
                 
@@ -294,7 +304,7 @@
 
                 <div class="section">
                     <button class="btn btn-flip" onclick="window.CardApp.flipCard()">Flip Card</button>
-                    <button class="btn btn-primary" onclick="window.CardApp.exportCardAsGif()">Export GIF</button>
+                    <!-- <button class="btn btn-primary" onclick="window.CardApp.exportCardAsGif()">Export GIF</button> -->
                 </div>
 
             </div>

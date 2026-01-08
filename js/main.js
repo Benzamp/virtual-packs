@@ -91,6 +91,7 @@ const cardFragmentShader = `
 `;
 
 window.CardApp = {
+    currentLoadedId: null,
     scene: null,
     camera: null,
     renderer: null,
@@ -740,52 +741,100 @@ window.CardApp = {
     },
 
     async loadFromVault(recordId) {
-        const { data: record, error } = await window.supabase
-            .from('cards')
-            .select('*')
-            .eq('id', recordId)
-            .single(); //
+        try {
+            const { data: record, error } = await window.supabase
+                .from('cards')
+                .select('*')
+                .eq('id', recordId)
+                .single();
 
-        if (record && record.config) {
-            // Pass the master backup object to the UI restorer
-            this.applyDataToUI(record.config); 
+            if (record) {
+                this.currentLoadedId = record.id; // Store the ID
+                this.applyDataToUI(record.config);
+                this.updateCard();
+                
+                // Show the Update button, since we are editing an existing record
+                document.getElementById('update-vault-btn')?.classList.remove('hidden');
+                
+                if (typeof switchView === 'function') switchView('creator');
+            }
+        } catch (err) { console.error(err); }
+    },
+
+    async updateExistingCard() {
+        if (!this.currentLoadedId) return alert("No card loaded to update.");
+
+        const formData = window.UIHandler.getFormData();
+        
+        try {
+            // Update the record where ID matches currentLoadedId
+            const { error } = await window.supabase
+                .from('cards')
+                .update({
+                    config: formData,
+                    fName: formData.fName,
+                    lName: formData.lName,
+                    team: formData.team,
+                    // Keep existing cardName/Season or update them from formData if desired
+                })
+                .eq('id', this.currentLoadedId);
+
+            if (error) throw error;
+            alert("Cloud Record Updated Successfully!");
             
-            // Final refresh of the 3D scene
-            this.updateCard(); 
-            
-            if (typeof switchView === 'function') switchView('creator');
-        } else {
-            alert("Could not find configuration for this card.");
+        } catch (err) {
+            alert("Update failed: " + err.message);
         }
+    },
+
+    resetCurrentCard() {
+        this.currentLoadedId = null;
+        document.getElementById('update-vault-btn')?.classList.add('hidden');
     },
 
     applyDataToUI(data) {
         if (!data) return;
 
-        // Helper to update an element and trigger its event
-        const updateElement = (id, value) => {
+        // 1. Handle double serialization: If data is a string, parse it first
+        let cleanData = data;
+        if (typeof data === 'string') {
+            try {
+                cleanData = JSON.parse(data);
+            } catch (e) {
+                console.error("Failed to parse data string:", e);
+                return;
+            }
+        }
+
+        const setVal = (id, val) => {
             const el = document.getElementById(id);
             if (el) {
-                el.value = value;
-                el.dispatchEvent(new Event('input')); // Forces the 3D card to update
+                if (el.type === 'checkbox') {
+                    el.checked = (val === true || val === 'true');
+                } else {
+                    el.value = val;
+                }
+                el.dispatchEvent(new Event('input', { bubbles: true }));
             }
         };
 
-        // Loop through every key in the saved config
-        Object.keys(data).forEach(key => {
-            const value = data[key];
+        // 2. Loop through the parsed object
+        Object.keys(cleanData).forEach(key => {
+            let val = cleanData[key];
 
-            if (typeof value === 'object' && value !== null) {
-                // It's a nested object (like fNameStyle or stats), loop through its sub-keys
-                Object.keys(value).forEach(subKey => {
-                    // Many UI IDs match the subKey (e.g., 'fNameX', 'spd')
-                    updateElement(subKey, value[subKey]);
-                });
+            // If a nested property (like 'stats') is also a string, parse it too
+            if (typeof val === 'string' && (val.startsWith('{') || val.startsWith('['))) {
+                try { val = JSON.parse(val); } catch(e) {}
+            }
+
+            if (typeof val === 'object' && val !== null) {
+                Object.keys(val).forEach(subKey => setVal(subKey, val[subKey]));
             } else {
-                // It's a top-level value (like fName, team, rarityTier)
-                updateElement(key, value);
+                setVal(key, val);
             }
         });
+
+        if (window.CardApp?.updateCard) window.CardApp.updateCard();
     },
 
     async renderGallery() {

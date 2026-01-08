@@ -368,7 +368,7 @@ window.CardApp = {
         });
 
         const getMaterial = (tex, isHoloEnabled, isTransparent = false) => {
-            const shouldShowHolo = isHoloEnabled || data.isFoil || data.rarityTier === 'Legendary';
+            const shouldShowHolo = isHoloEnabled;
             
             if (shouldShowHolo) {
                 return new THREE.ShaderMaterial({
@@ -645,49 +645,68 @@ window.CardApp = {
         }, { passive: false });
     },
 
-    // --- UPDATED SUPABASE SAVE LOGIC ---
     async saveToVault() {
         const formData = window.UIHandler.getFormData();
         
-        // 1. Capture a thumbnail of the current 3D view to show in the gallery
-        this.renderer.render(this.scene, this.camera);
-        const blob = await new Promise(res => this.renderer.domElement.toBlob(res, 'image/webp', 0.8));
-        const fileName = `card_${Date.now()}.webp`;
+        const customName = prompt("Card Name:", `${formData.fName} ${formData.lName}`);
+        if (!customName) return;
+
+        const customSeason = prompt("Season:", "2026");
+        if (!customSeason) return;
 
         try {
-            alert("Uploading to Supabase... please wait.");
+            // Prepare record - explicitly do NOT include an 'id' property here
+            const cardRecord = {
+                cardName: customName,
+                cardSeason: customSeason,
+                fName: formData.fName,
+                lName: formData.lName,
+                team: formData.team,
+                pPosition: formData.pPosition,
+                pNumber: formData.pNumber,
+                quote: formData.quote,
+                themeColor: formData.themeColor,
+                holoBg: formData.holoBg,
+                holoPlayer: formData.holoPlayer,
+                holoBorder: formData.holoBorder,
+                fNameStyle: formData.fNameStyle,
+                lNameStyle: formData.lNameStyle,
+                numStyle: formData.numStyle,
+                posStyle: formData.posStyle,
+                teamLogoData: formData.teamLogoData,
+                seasonLogoData: formData.seasonLogoData,
+                stats: formData.stats,
+                config: formData 
+            };
 
-            // 2. Upload Thumbnail to Supabase Storage
-            const { data: storageData, error: storageError } = await window.supabase.storage
+            // Render and Upload
+            this.renderer.render(this.scene, this.camera);
+            const blob = await new Promise(res => this.renderer.domElement.toBlob(res, 'image/webp', 0.8));
+            const fileName = `card_${Date.now()}.webp`;
+
+            const { data: storageData, error: sErr } = await window.supabase.storage
                 .from('card-thumbnails')
                 .upload(fileName, blob);
+            
+            if (sErr) throw sErr;
 
-            if (storageError) throw storageError;
-
-            // Get Public URL
             const { data: urlData } = window.supabase.storage
                 .from('card-thumbnails')
                 .getPublicUrl(fileName);
 
-            // 3. Save "Recipe" to Database
-            const { error: dbError } = await window.supabase
+            cardRecord.image_url = urlData.publicUrl;
+
+            // Always use .insert() for new cards to avoid primary key conflicts
+            const { error: iErr } = await window.supabase
                 .from('cards')
-                .insert([{
-                    fName: formData.fName,
-                    lName: formData.lName,
-                    team: formData.team,
-                    pPosition: formData.pPosition,
-                    stats: formData.stats,
-                    config: formData, // Save the whole object for reconstruction
-                    image_url: urlData.publicUrl
-                }]);
+                .insert([cardRecord]);
+            
+            if (iErr) throw iErr;
 
-            if (dbError) throw dbError;
-
-            alert("Card successfully synced to Cloud Vault!");
+            alert("Card saved successfully!");
+            this.renderGallery();
         } catch (err) {
-            console.error(err);
-            alert("Error: " + err.message);
+            alert("Save failed: " + err.message);
         }
     },
 
@@ -720,25 +739,37 @@ window.CardApp = {
         }
     },
 
-    // --- UPDATED SUPABASE LOAD LOGIC ---
     async loadFromVault(recordId) {
-        const { data: record, error } = await window.supabase
-            .from('cards')
-            .select('*')
-            .eq('id', recordId)
-            .single();
+        console.log("Attempting to load card with ID:", recordId);
 
-        if (error || !record) return alert("Card not found");
+        if (!recordId || recordId === 'undefined') {
+            return alert("Error: Invalid Card ID. Please try refreshing the gallery.");
+        }
 
-        // Restore Form Inputs (Sliders/Text)
-        this.applyDataToUI(record.config);
-        
-        // Since we aren't storing the high-res upload layers in the DB 
-        // (to save space), the user would re-upload their custom PNGs 
-        // or you could extend this to save those to storage buckets too.
-        
-        switchView('creator');
-        this.updateCard();
+        try {
+            const { data: record, error } = await window.supabase
+                .from('cards')
+                .select('*')
+                .eq('id', recordId) // Ensure your DB column is actually named 'id'
+                .single();
+
+            if (error || !record) {
+                console.error("Supabase Error:", error);
+                return alert("Card not found in the cloud vault.");
+            }
+
+            // Apply the saved configuration to the UI
+            if (record.config) {
+                this.applyDataToUI(record.config);
+                this.updateCard();
+                if (typeof switchView === 'function') switchView('creator');
+            } else {
+                alert("This card has no configuration data saved.");
+            }
+
+        } catch (err) {
+            console.error("Critical Load Error:", err);
+        }
     },
 
     applyDataToUI(data) {
@@ -762,36 +793,6 @@ window.CardApp = {
                     }
                 });
             }
-        });
-    },
-
-    async renderGallery() {
-        const gallery = document.getElementById('card-gallery');
-        gallery.innerHTML = '<p>Fetching from cloud...</p>';
-
-        const { data: cards, error } = await window.supabase
-            .from('cards')
-            .select('*')
-            .order('created_at', { ascending: false });
-
-        if (error) return gallery.innerHTML = '<p>Error loading vault.</p>';
-        
-        gallery.innerHTML = cards.length ? '' : '<p>Your vault is empty.</p>';
-
-        cards.forEach(card => {
-            const item = document.createElement('div');
-            item.className = 'menu-btn';
-            item.style.height = "auto";
-            item.innerHTML = `
-                <img src="${card.image_url}" style="width:100%; border-radius:8px; margin-bottom:10px; border:1px solid #444;">
-                <span class="label">${card.fName} ${card.lName}</span>
-                <small>${card.team} | ${card.pPosition}</small>
-                <button onclick="window.CardApp.loadFromVault(${card.id})" 
-                        style="width:100%; margin-top:10px; background:#8b5cf6; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer; font-weight:bold;">
-                    LOAD DATA
-                </button>
-            `;
-            gallery.appendChild(item);
         });
     },
 
@@ -831,25 +832,29 @@ window.CardApp = {
 
             cards.forEach(card => {
                 const item = document.createElement('div');
-                item.className = 'menu-btn'; // Keeping your existing style
+                item.className = 'menu-btn';
                 item.style.height = 'auto';
-                item.style.padding = '15px';
-                item.style.marginBottom = '10px';
+                
+                // Safety check for ID - log it to see if it's missing in the DB
+                if (!card.id) console.error("Database record missing ID for:", card.cardName);
 
                 item.innerHTML = `
-                    <div style="margin-bottom: 10px;">
-                        <img src="${card.image_url}" style="width: 100%; border-radius: 4px; border: 1px solid #444;">
+                    <div style="margin-bottom: 10px; position: relative; min-height: 100px; background: #222;">
+                        <img src="${card.image_url}" 
+                            onerror="this.src='assets/placeholder.png'; this.style.opacity='0.5';"
+                            style="width: 100%; border-radius: 4px; border: 1px solid #444; display: block;">
                     </div>
-                    <span class="label" style="display: block; font-weight: bold;">${card.fName} ${card.lName}</span>
-                    <small style="color: #aaa;">${card.team} | ${card.pPosition}</small>
+                    <span class="label" style="display: block; font-weight: bold;">${card.cardName || 'Unnamed'}</span>
+                    <small style="color: #aaa;">Season: ${card.cardSeason} | ${card.team}</small>
                     
-                    <button onclick="window.CardApp.loadFromVault(${card.id})" 
-                            style="width: 100%; margin-top: 10px; background: #8b5cf6; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                    <button onclick="window.CardApp.loadFromVault('${card.id}')" 
+                            style="width: 100%; margin-top: 10px; background: #8b5cf6; color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">
                         LOAD DATA
                     </button>
                 `;
                 gallery.appendChild(item);
             });
+
         } catch (err) {
             console.error("Gallery Load Error:", err.message);
             gallery.innerHTML = `<p style="color: #ff4444;">Error loading vault: ${err.message}</p>`;

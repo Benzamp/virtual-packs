@@ -221,7 +221,6 @@ window.UIHandler = {
             holoBorder: document.getElementById('holoBorder')?.checked || false,
 
             // Back Side Customization
-            backColor: getVal('backColor'),
             quote: getVal('quote'), // Career Highlights text
             stats: {
                 // Physical & Core Attributes

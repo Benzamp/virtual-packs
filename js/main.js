@@ -706,81 +706,119 @@ window.CardApp = {
     },
 
     async saveToVault() {
-    // 0. Capture variables from the UI immediately
-    const formData = window.UIHandler.getFormData();
-    const flakeType = document.getElementById('flakeType')?.value; 
+        // 0. Capture variables from the UI immediately
+        const formData = window.UIHandler.getFormData();
+        const flakeType = document.getElementById('flakeType')?.value; 
 
-    const customName = prompt("Card Name:", `${formData.fName} ${formData.lName}`);
-    if (!customName) return;
-    const customSeason = prompt("Season:", "2026");
-    if (!customSeason) return;
+        const customName = prompt("Card Name:", `${formData.fName} ${formData.lName}`);
+        if (!customName) return;
+        const customSeason = prompt("Season:", "2026");
+        if (!customSeason) return;
 
-    try {
-        const uploadLayer = async (imgElement, fileName) => {
-            if (!imgElement || !imgElement.src || !imgElement.src.startsWith('data:')) {
-                return imgElement?.src || null;
-            }
+        try {
+            // Helper function to upload layers to Supabase Storage
+            const uploadLayer = async (imgElement, fileName) => {
+                if (!imgElement || !imgElement.src || !imgElement.src.startsWith('data:')) {
+                    return imgElement?.src || null;
+                }
+                
+                const blob = await (await fetch(imgElement.src)).blob();
+                const path = `layers/${Date.now()}_${fileName}.webp`;
+                
+                const { error: storageErr } = await window.supabase.storage
+                    .from('card-thumbnails')
+                    .upload(path, blob);
+                
+                if (storageErr) throw storageErr;
+                return window.supabase.storage.from('card-thumbnails').getPublicUrl(path).data.publicUrl;
+            };
+
+            // 1. Upload ALL active images and get their Cloud URLs
+            const bgUrl = await uploadLayer(window.CardApp.userImages.layerBg, 'bg');
+            const playerUrl = await uploadLayer(window.CardApp.userImages.layerPlayer, 'player');
+            const borderUrl = await uploadLayer(window.CardApp.userImages.layerBorder, 'border');
+            const seasonLogoUrl = await uploadLayer(window.CardApp.userImages.seasonLogo, 'season');
+            const teamLogoUrl = await uploadLayer(window.CardApp.userImages.teamLogo, 'team');
+            const backBgUrl = await uploadLayer(window.CardApp.userImages.back, 'back_bg');
+            const logo1Url = await uploadLayer(window.CardApp.userImages.logo1, 'logo1');
+            const logo2Url = await uploadLayer(window.CardApp.userImages.logo2, 'logo2');
+
+            // 2. Render and Upload Gallery Thumbnail
+            this.renderer.render(this.scene, this.camera);
+            const thumbBlob = await new Promise(res => this.renderer.domElement.toBlob(res, 'image/webp', 0.8));
+            const thumbPath = `thumbs/card_${Date.now()}.webp`;
             
-            const blob = await (await fetch(imgElement.src)).blob();
-            const path = `layers/${Date.now()}_${fileName}.webp`;
-            
-            // FIXED: Using 'path' and 'blob' correctly here
-            const { error: storageErr } = await window.supabase.storage
+            const { error: thumbErr } = await window.supabase.storage
                 .from('card-thumbnails')
-                .upload(path, blob);
+                .upload(thumbPath, thumbBlob);
             
-            if (storageErr) throw storageErr;
-            return window.supabase.storage.from('card-thumbnails').getPublicUrl(path).data.publicUrl;
-        };
+            if (thumbErr) throw thumbErr;
 
-        // 1. Upload ALL active images
-        const bgUrl = await uploadLayer(window.CardApp.userImages.layerBg, 'bg');
-        const playerUrl = await uploadLayer(window.CardApp.userImages.layerPlayer, 'player');
-        const borderUrl = await uploadLayer(window.CardApp.userImages.layerBorder, 'border');
-        const seasonLogoUrl = await uploadLayer(window.CardApp.userImages.seasonLogo, 'season');
-        const teamLogoUrl = await uploadLayer(window.CardApp.userImages.teamLogo, 'team');
-        const backBgUrl = await uploadLayer(window.CardApp.userImages.back, 'back_bg');
-        const logo1Url = await uploadLayer(window.CardApp.userImages.logo1, 'logo1');
-        const logo2Url = await uploadLayer(window.CardApp.userImages.logo2, 'logo2');
+            // Retrieve the public URL for the thumbnail
+            const thumbUrl = window.supabase.storage.from('card-thumbnails').getPublicUrl(thumbPath).data.publicUrl;
 
-        // 2. Prepare the final record
-        const cardRecord = {
-            cardName: customName,
-            cardSeason: customSeason,
-            fName: formData.fName,
-            lName: formData.lName,
-            team: formData.team,
-            pPosition: formData.pPosition,
-            config: {
-                ...formData,
-                bgUrl, playerUrl, borderUrl, 
-                teamLogoUrl, seasonLogoUrl,
-                flakeType, // Now properly defined and pinned
-                backBgUrl, logo1Url, logo2Url
-            }
-        };
+            // 3. Prepare the final record with Organized Hybrid Structure
+            const cardRecord = {
+                // SEARCHABLE COLUMNS
+                cardName: customName,
+                cardSeason: customSeason,
+                fName: formData.fName,
+                lName: formData.lName,
+                team: formData.team,
+                pPosition: formData.pPosition,
+                serial: formData.serial,
+                image_url: thumbUrl, // The main gallery preview
 
-        // 3. Render and Upload Gallery Thumbnail
-        this.renderer.render(this.scene, this.camera);
-        const thumbBlob = await new Promise(res => this.renderer.domElement.toBlob(res, 'image/webp', 0.8));
-        const thumbPath = `thumbs/card_${Date.now()}.webp`;
-        await window.supabase.storage.from('card-thumbnails').upload(thumbPath, thumbBlob);
-        cardRecord.image_url = window.supabase.storage.from('card-thumbnails').getPublicUrl(thumbPath).data.publicUrl;
+                // ATTRIBUTES COLUMN (Formerly 'stats')
+                attributes: {
+                    stats: formData.stats,
+                    quote: formData.quote,
+                    pNumber: formData.pNumber
+                },
 
-        // 4. Save to Database
-        const { error: dbErr } = await window.supabase
-            .from('cards')
-            .insert([cardRecord]);
+                // STYLECONFIG COLUMN (X, Y, Scale, Rot)
+                styleConfig: {
+                    fNameStyle: formData.fNameStyle,
+                    lNameStyle: formData.lNameStyle,
+                    numStyle: formData.numStyle,
+                    posStyle: formData.posStyle,
+                    teamLogoData: formData.teamLogoData,
+                    seasonLogoData: formData.seasonLogoData,
+                    rarityTier: formData.rarityTier,
+                    // Holo Bools moved here as they are part of the 'Visual Style'
+                    holoBg: formData.holoBg,
+                    holoPlayer: formData.holoPlayer,
+                    holoBorder: formData.holoBorder,
+                    isFoil: formData.isFoil,
+                    flakeType: flakeType
+                },
 
-        if (dbErr) throw dbErr;
+                // IMAGECONFIG COLUMN (Cloud URLs)
+                imageConfig: {
+                    bgUrl, 
+                    playerUrl, 
+                    borderUrl, 
+                    teamLogoUrl, 
+                    seasonLogoUrl,
+                    backBgUrl, 
+                    logo1Url, 
+                    logo2Url
+                }
+            };
+            // 4. Save to Database
+            const { error: dbErr } = await window.supabase
+                .from('cards')
+                .insert([cardRecord]);
 
-        alert("Full card (Front & Back) saved successfully!");
-        this.renderGallery();
+            if (dbErr) throw dbErr;
 
-    } catch (err) {
-        console.error("Save Error:", err);
-        alert("Save failed: " + err.message);
-    }
+            alert("Full card (Front & Back) saved successfully!");
+            this.renderGallery();
+
+        } catch (err) {
+            console.error("Save Error:", err);
+            alert("Save failed: " + err.message);
+        }
     },
 
      // Step A: The URL-to-Memory Helper
@@ -803,7 +841,6 @@ window.CardApp = {
 
         // 1. FRESH CAPTURE: Get the newest UI values
         const formData = window.UIHandler.getFormData();
-        const activeFlake = document.getElementById('flakeType')?.value;
 
         try {
             // 2. BUILD PAYLOAD: Ensure the new flake is at the top level of the config
@@ -814,7 +851,7 @@ window.CardApp = {
                 pPosition: formData.pPosition,
                 config: {
                     ...formData,
-                    flakeType: activeFlake, // Explicitly overwrite the old value
+                    flakeType: formData.flakeType, // Explicitly overwrite the old value
                     // Use memory for images, but fallback to DB values if memory is lost
                     bgUrl: this.userImages.layerBg?.src || formData.bgUrl,
                     playerUrl: this.userImages.layerPlayer?.src || formData.playerUrl,
@@ -858,55 +895,79 @@ window.CardApp = {
     async loadFromVault(recordId) {
         console.log("🚀 Loading Card ID:", recordId);
         try {
+            // 1. Fetch the full record from the 'cards' table
             const { data: record, error } = await window.supabase
-                .from('cards').select('*').eq('id', recordId).single();
+                .from('cards')
+                .select('*')
+                .eq('id', recordId)
+                .single();
 
             if (error || !record) return alert("Card not found.");
 
             this.currentLoadedId = record.id;
-            const cfg = record.config;
 
-            // 1. Memory Reset: Prevent ghost layers from previous cards
+            // 2. Destructure our Hybrid Buckets
+            const { attributes, styleConfig, imageConfig } = record;
+
+            // 3. Memory Reset: Clear out previous card data to prevent "ghosting"
             this.userImages = { 
                 layerBg: null, layerPlayer: null, layerBorder: null, 
                 back: null, logo1: null, logo2: null, 
                 teamLogo: null, seasonLogo: null 
             };
 
-            // 2. Parallel Hydration: Download all image assets
+            // 4. Parallel Hydration: Download all assets from imageConfig
+            // Note: Using optional chaining ?. to prevent crashes if a bucket is missing
             await Promise.all([
-                this.hydrateImage(cfg.bgUrl).then(img => this.userImages.layerBg = img),
-                this.hydrateImage(cfg.playerUrl).then(img => this.userImages.layerPlayer = img),
-                this.hydrateImage(cfg.borderUrl).then(img => this.userImages.layerBorder = img),
-                this.hydrateImage(cfg.seasonLogoUrl).then(img => this.userImages.seasonLogo = img),
-                this.hydrateImage(cfg.teamLogoUrl).then(img => this.userImages.teamLogo = img),
-                this.hydrateImage(cfg.backBgUrl).then(img => this.userImages.back = img),
-                this.hydrateImage(cfg.logo1Url).then(img => this.userImages.logo1 = img),
-                this.hydrateImage(cfg.logo2Url).then(img => this.userImages.logo2 = img)
+                this.hydrateImage(imageConfig?.bgUrl).then(img => this.userImages.layerBg = img),
+                this.hydrateImage(imageConfig?.playerUrl).then(img => this.userImages.layerPlayer = img),
+                this.hydrateImage(imageConfig?.borderUrl).then(img => this.userImages.layerBorder = img),
+                this.hydrateImage(imageConfig?.seasonLogoUrl).then(img => this.userImages.seasonLogo = img),
+                this.hydrateImage(imageConfig?.teamLogoUrl).then(img => this.userImages.teamLogo = img),
+                this.hydrateImage(imageConfig?.backBgUrl).then(img => this.userImages.back = img),
+                this.hydrateImage(imageConfig?.logo1Url).then(img => this.userImages.logo1 = img),
+                this.hydrateImage(imageConfig?.logo2Url).then(img => this.userImages.logo2 = img)
             ]);
 
-            // 3. Fix Holo Type: Apply the saved foil pattern
-            if (cfg.flakeType) {
-                console.log("💎 Applying Card-Specific Holo:", cfg.flakeType);
+            // 5. Foil/Holo Setup: Apply pattern from styleConfig
+            if (styleConfig?.flakeType) {
+                console.log("💎 Applying Card-Specific Holo:", styleConfig.flakeType);
                 
-                // 1. Force the 3D Engine to load the specific texture
-                this.changeFlakeTexture(cfg.flakeType); 
+                // Force the 3D Engine to load the specific texture
+                this.changeFlakeTexture(styleConfig.flakeType); 
                 
-                // 2. Sync the Sidebar UI dropdown so the user sees what is active
+                // Sync the Sidebar UI dropdown
                 const flakeDropdown = document.getElementById('flakeType');
-                if (flakeDropdown) flakeDropdown.value = cfg.flakeType;
+                if (flakeDropdown) flakeDropdown.value = styleConfig.flakeType;
             }
-                        // 4. Fill UI: Update text and dispatch events for labels
-            this.applyDataToUI(cfg);
 
-            // 5. Render: Final 3D Redraw
+            // 6. Fill UI: Re-populate all sidebar fields
+            // We pass a combined object to applyDataToUI to ensure nothing is missed
+            const combinedData = {
+                cardName: record.cardName,
+                cardSeason: record.cardSeason,
+                fName: record.fName,
+                lName: record.lName,
+                team: record.team,
+                pPosition: record.pPosition,
+                serial: record.serial,
+                ...attributes,   // Spread stats, quotes, pNumber
+                ...styleConfig,  // Spread transformations and holo bools
+                ...imageConfig   // Spread asset URLs
+            };
+            
+            this.applyDataToUI(combinedData);
+
+            // 7. Render: Final 3D Redraw
             this.updateCard();
             
+            // UI Navigation
             document.getElementById('update-vault-btn')?.classList.remove('hidden');
-            switchView('creator');
+            if (typeof switchView === 'function') switchView('creator');
 
         } catch (err) {
             console.error("Load Error:", err);
+            alert("Failed to load card data: " + err.message);
         }
     },
 
@@ -918,46 +979,49 @@ window.CardApp = {
     applyDataToUI(data) {
         if (!data) return;
 
-        // 1. Handle double serialization: If data is a string, parse it first
-        let cleanData = data;
-        if (typeof data === 'string') {
-            try {
-                cleanData = JSON.parse(data);
-            } catch (e) {
-                console.error("Failed to parse data string:", e);
-                return;
-            }
-        }
+        console.log("🛠️ Syncing UI with loaded data...");
 
+        // 1. Internal Helper to find and set UI elements
         const setVal = (id, val) => {
             const el = document.getElementById(id);
-            if (el) {
-                if (el.type === 'checkbox') {
-                    el.checked = (val === true || val === 'true');
-                } else {
-                    el.value = val;
-                }
-                el.dispatchEvent(new Event('input', { bubbles: true }));
+            if (!el) return;
+
+            if (el.type === 'checkbox') {
+                // Handle boolean strings or true booleans
+                el.checked = (val === true || val === 'true');
+            } else {
+                el.value = val !== null && val !== undefined ? val : "";
             }
+
+            // Trigger 'input' event so listeners (like the 3D preview) update
+            el.dispatchEvent(new Event('input', { bubbles: true }));
         };
 
-        // 2. Loop through the parsed object
-        Object.keys(cleanData).forEach(key => {
-            let val = cleanData[key];
+        // 2. Process the Data Object
+        // Since we merged all buckets into 'combinedData' in loadFromVault,
+        // we iterate through everything
+        Object.keys(data).forEach(key => {
+            let val = data[key];
 
-            // If a nested property (like 'stats') is also a string, parse it too
-            if (typeof val === 'string' && (val.startsWith('{') || val.startsWith('['))) {
-                try { val = JSON.parse(val); } catch(e) {}
-            }
-
-            if (typeof val === 'object' && val !== null) {
-                Object.keys(val).forEach(subKey => setVal(subKey, val[subKey]));
+            // 3. Recursive check for nested objects (stats, style objects, logo data)
+            // If the value is an object (and not null), we drill down one level
+            if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+                Object.keys(val).forEach(subKey => {
+                    // This handles stats.spd, fNameStyle.x, teamLogoData.scale, etc.
+                    setVal(subKey, val[subKey]);
+                });
             } else {
+                // This handles top-level strings like fName, lName, and team
                 setVal(key, val);
             }
         });
 
-        if (window.CardApp?.updateCard) window.CardApp.updateCard();
+        // 4. Force a 3D refresh once the UI fields are populated
+        if (window.CardApp && typeof window.CardApp.updateCard === 'function') {
+            window.CardApp.updateCard();
+        }
+        
+        console.log("✅ UI Hydration Complete.");
     },
 
     async renderGallery() {

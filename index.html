@@ -72,8 +72,8 @@
                     <input type="text" id="team" placeholder="Team Name" value="RIVERHOGS">
 
                     <div class="section team-logo-section">
-                        <label>Team Logo Overlay</label>
-                        <input type="file" id="imgLayerLogo" accept="image/*" onchange="window.CardApp.updateCard()">
+                        <label>Team Logo</label>
+                        <input type="file" id="teamLogo" accept="image/*" onchange="window.CardApp.updateCard()">
                         
                         <div class="transform-group" style="margin-top:10px;">
                             <small style="color:var(--accent)">Logo Transform</small>
@@ -261,17 +261,18 @@
                         <label>Rotation: <span id="valSeasonRot">0</span>°</label>
                         <input type="range" id="seasonRot" min="0" max="360" value="0">
                     </div>
+                </div>
 
-                    <hr style="border: 0; border-top: 1px solid #1e293b; margin: 15px 0;">
-
+                <div class="section">
+                    <label>Card Back</label>
                     <label style="font-size: 0.6rem; color: #64748b;">Logo 1</label>
                     <input type="file" id="logo1" accept="image/*" onchange="window.CardApp.updateCard()">
 
                     <label style="font-size: 0.6rem; color: #64748b;">Logo 2</label>
                     <input type="file" id="logo2" accept="image/*" onchange="window.CardApp.updateCard()">
 
-                    <label style="font-size: 0.6rem; color: #64748b;">Team Logo</label>
-                    <input type="file" id="teamLogo" accept="image/*" onchange="window.CardApp.updateCard()">
+                    <label style="font-size: 0.6rem; color: #64748b;">Team Logo (Background)</label>
+                    <input type="file" id="teamLogoBack" accept="image/*" onchange="window.CardApp.updateCard()">
                 </div>
 
                 <div class="section">
@@ -354,6 +355,7 @@
     <canvas id="hidden-canvas-vp" width="1024" height="1480" style="display:none;"></canvas>
     <canvas id="hidden-canvas-league" width="1024" height="1480" style="display:none;"></canvas>
     <canvas id="hidden-canvas-team-logo" width="1024" height="1480" style="display:none;"></canvas>
+    <canvas id="hidden-canvas-team-logo-back" width="1024" height="1480" style="display:none;"></canvas>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>

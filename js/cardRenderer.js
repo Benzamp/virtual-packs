@@ -148,7 +148,7 @@ window.CardRenderer = {
         }
 
         // --- RENDER TEAM LOGO (On Border Layer) ---
-        const logoImg = userImages.layerLogo || userImages.logoFront; 
+        const logoImg = userImages.teamLogo; 
         if (logoImg) {
             const ld = data.teamLogoData;
             bCtx.save();
@@ -190,11 +190,11 @@ window.CardRenderer = {
         }
 
         // TEAM LOGO WATERMARK
-        if (userImages.teamLogo) {
+        if (userImages.teamLogoBack) {
             ctx.save();
             ctx.globalAlpha = 0.15; 
             const watermarkSize = 900;
-            ctx.drawImage(userImages.teamLogo, (w - watermarkSize) / 2, (h - watermarkSize) / 2, watermarkSize, watermarkSize);
+            ctx.drawImage(userImages.teamLogoBack, (w - watermarkSize) / 2, (h - watermarkSize) / 2, watermarkSize, watermarkSize);
             ctx.restore();
         }
 
@@ -218,10 +218,10 @@ window.CardRenderer = {
         drawBorderElements(ctx, true);
         if (vpCtx) drawBorderElements(vpCtx, false);
 
-        // 3. LOGOS (RESTORED SECTION)
+        // 3. LOGOS
         const logoSize = 80;
-        const logoY = 805; // Moved down as requested
-        const offsetX = 220; // Distance from center
+        const logoY = 805;
+        const offsetX = 220;
 
         if (userImages.logo1) {
             const lx1 = (w / 2) - offsetX - (logoSize / 2);

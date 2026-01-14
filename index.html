@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VSC Terminal | Card Manager</title>
+    <title>Virtual Packs</title>
+    <link rel="icon" type="image/jpeg" href="assets/logos/virtual-packs-logo.png">
     <link rel="stylesheet" href="dist/style.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,22 +13,24 @@
 <body>
 
     <div id="view-home" class="screen-center">
-        <div class="menu-card">
-            <h1 class="crt-title">VSC TERMINAL</h1>
-            <p style="color: #94a3b8;">ADMINISTRATION & CARD MANAGEMENT</p>
-            <div class="menu-grid">
-                <div class="menu-btn" onclick="switchView('creator')">
-                    <span class="icon">🎴</span>
-                    <span class="label">CREATOR</span>
-                </div>
-                <div class="menu-btn" onclick="switchView('vault')">
-                    <span class="icon">📂</span>
-                    <span class="label">VAULT</span>
-                </div>
-                <div class="menu-btn disabled">
-                    <span class="icon">📦</span>
-                    <span class="label">PACKS</span>
-                    <small>LOCKED</small>
+        <div class="home-content">
+            <img src="assets/logos/virtual-packs-logo.png" alt="VP Logo" height="200" width="200" class="crt-logo">
+            <div class="menu-card">
+                <p style="color: #94a3b8;">CARD MANAGER</p>
+                <div class="menu-grid">
+                    <div class="menu-btn" onclick="switchView('creator')">
+                        <span class="icon">🎴</span>
+                        <span class="label">STUDIO</span>
+                    </div>
+                    <div class="menu-btn" onclick="switchView('vault')">
+                        <span class="icon">📂</span>
+                        <span class="label">VAULT</span>
+                    </div>
+                    <div class="menu-btn disabled">
+                        <span class="icon">📦</span>
+                        <span class="label">PACKS</span>
+                        <small>LOCKED</small>
+                    </div>
                 </div>
             </div>
         </div>
@@ -37,8 +40,16 @@
         <div class="top-nav">
             <button class="nav-back" onclick="switchView('home')">← TERMINAL</button>
             <h2 style="font-size: 1rem;">CARD CREATOR</h2>
-            <button class="nav-back" style="margin-left:auto; border-color:#8b5cf6; color:#8b5cf6;" onclick="window.CardApp.saveToVault()">SAVE TO VAULT</button>
-        </div>
+            <div style="margin-left:auto; display:flex; gap:10px;">
+                <button id="update-vault-btn" class="nav-back hidden" 
+                        style="border-color:#fbbf24; color:#fbbf24;" 
+                        onclick="window.CardApp.updateExistingCard()">UPDATE</button>
+                
+                <button class="nav-back" style="border-color:#ce2c24; color:#ce2c24;" 
+                        onclick="window.CardApp.saveToVault()">SAVE NEW</button>
+            </div>
+        </div>  
+
         <div class="app-container">
             <div class="sidebar">
                 
@@ -61,8 +72,8 @@
                     <input type="text" id="team" placeholder="Team Name" value="RIVERHOGS">
 
                     <div class="section team-logo-section">
-                        <label>Team Logo Overlay</label>
-                        <input type="file" id="imgLayerLogo" accept="image/*" onchange="window.CardApp.updateCard()">
+                        <label>Team Logo</label>
+                        <input type="file" id="teamLogo" accept="image/*" onchange="window.CardApp.updateCard()">
                         
                         <div class="transform-group" style="margin-top:10px;">
                             <small style="color:var(--accent)">Logo Transform</small>
@@ -250,21 +261,18 @@
                         <label>Rotation: <span id="valSeasonRot">0</span>°</label>
                         <input type="range" id="seasonRot" min="0" max="360" value="0">
                     </div>
+                </div>
 
-                    <hr style="border: 0; border-top: 1px solid #1e293b; margin: 15px 0;">
-
-                    <label>Card back</label>
-                    <label style="font-size: 0.6rem; color: #64748b;">Card back Image</label>
-                    <input type="file" id="imgBack" accept="image/*" onchange="window.CardApp.updateCard()">
-
+                <div class="section">
+                    <label>Card Back</label>
                     <label style="font-size: 0.6rem; color: #64748b;">Logo 1</label>
                     <input type="file" id="logo1" accept="image/*" onchange="window.CardApp.updateCard()">
 
                     <label style="font-size: 0.6rem; color: #64748b;">Logo 2</label>
                     <input type="file" id="logo2" accept="image/*" onchange="window.CardApp.updateCard()">
 
-                    <label style="font-size: 0.6rem; color: #64748b;">Team Logo</label>
-                    <input type="file" id="teamLogo" accept="image/*" onchange="window.CardApp.updateCard()">
+                    <label style="font-size: 0.6rem; color: #64748b;">Team Logo (Background)</label>
+                    <input type="file" id="teamLogoBack" accept="image/*" onchange="window.CardApp.updateCard()">
                 </div>
 
                 <div class="section">
@@ -297,7 +305,7 @@
 
                 <div class="section">
                     <button class="btn btn-flip" onclick="window.CardApp.flipCard()">Flip Card</button>
-                    <button class="btn btn-primary" onclick="window.CardApp.exportCardAsGif()">Export GIF</button>
+                    <!-- <button class="btn btn-primary" onclick="window.CardApp.exportCardAsGif()">Export GIF</button> -->
                 </div>
 
             </div>
@@ -326,7 +334,7 @@
     <div id="view-inspect" class="view-content hidden">
         <div class="top-nav">
             <button class="nav-back" onclick="switchView('vault')">← BACK TO VAULT</button>
-            <h2 id="inspect-title" style="font-size: 1rem; color: var(--accent);">VSC INSPECTOR</h2>
+            <h2 id="inspect-title" style="font-size: 1rem; color: var(--accent);">INSPECTOR</h2>
             <button class="nav-back" style="margin-left:auto;" onclick="window.CardApp.flipCard()">FLIP CARD</button>
         </div>
         <div class="app-container">
@@ -347,6 +355,7 @@
     <canvas id="hidden-canvas-vp" width="1024" height="1480" style="display:none;"></canvas>
     <canvas id="hidden-canvas-league" width="1024" height="1480" style="display:none;"></canvas>
     <canvas id="hidden-canvas-team-logo" width="1024" height="1480" style="display:none;"></canvas>
+    <canvas id="hidden-canvas-team-logo-back" width="1024" height="1480" style="display:none;"></canvas>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
@@ -355,8 +364,8 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <script>
-        const SUPABASE_URL = 'https://your-project-id.supabase.co';
-        const SUPABASE_KEY = 'your-anon-public-key';
+        const SUPABASE_URL = 'https://rvxbnajthlvdvujquoul.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_HUmqI46w7g3CsWQuuKkz2w_tLgGd3Wh';
         window.supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     </script>
 

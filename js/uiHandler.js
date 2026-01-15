@@ -1,11 +1,11 @@
 // js/uiHandler.js
 
 /**
- * View Switcher: Manages Home, Creator, Vault, and Inspector visibility.
+ * View Switcher
  * Re-parents the 3D renderer based on the active viewport to save memory.
  */
 window.switchView = function(viewId) {
-    const views = ['view-home', 'view-creator', 'view-vault', 'view-inspect'];
+    const views = ['view-home', 'view-studio', 'view-vault', 'view-inspect'];
     views.forEach(v => {
         const el = document.getElementById(v);
         if (el) el.classList.add('hidden');
@@ -14,7 +14,7 @@ window.switchView = function(viewId) {
     const targetView = document.getElementById('view-' + viewId);
     if (targetView) targetView.classList.remove('hidden');
 
-    const creatorViewport = document.getElementById('viewport');
+    const studioViewport = document.getElementById('viewport');
     const inspectViewport = document.getElementById('viewport-inspect');
     
     // Ensure the 3D Renderer moves to the active container
@@ -24,8 +24,8 @@ window.switchView = function(viewId) {
         if (viewId === 'inspect' && inspectViewport) {
             inspectViewport.appendChild(rendererElement);
             setTimeout(() => window.CardApp.handleResize('viewport-inspect'), 50);
-        } else if (viewId === 'creator' && creatorViewport) {
-            creatorViewport.appendChild(rendererElement);
+        } else if (viewId === 'studio' && studioViewport) {
+            studioViewport.appendChild(rendererElement);
             setTimeout(() => window.CardApp.handleResize('viewport'), 50);
         }
     }

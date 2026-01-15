@@ -856,17 +856,12 @@ window.CardApp = {
         const currentTeamColors = window.TeamColors.getColors();
 
         try {
-            // 1. UPDATED Image Upload Helper: Handles 'data:' AND 'blob:'
+            // 1. Image Upload Helper
             const uploadLayer = async (imgElement, fileName) => {
                 if (!imgElement || !imgElement.src) return null;
-
-                // Check if it is a local temporary file (blob or base64)
                 const isLocal = imgElement.src.startsWith('data:') || imgElement.src.startsWith('blob:');
-                
-                // If it's NOT local (meaning it's already a https://...supabase URL), return it as is
                 if (!isLocal) return imgElement.src;
 
-                // It is a local file, so we must upload it
                 const blob = await (await fetch(imgElement.src)).blob();
                 const path = `layers/${Date.now()}_${fileName}.webp`;
                 const { error: storageErr } = await window.supabase.storage
@@ -876,7 +871,7 @@ window.CardApp = {
                 return window.supabase.storage.from('card-thumbnails').getPublicUrl(path).data.publicUrl;
             };
 
-            // 2. Process all images in parallel (Including the new Team Logo Back)
+            // 2. Process all images in parallel
             const [
                 bgUrl, playerUrl, borderUrl, seasonLogoUrl, 
                 teamLogoUrl, teamLogoBackUrl, backBgUrl, logo1Url, logo2Url
@@ -886,38 +881,28 @@ window.CardApp = {
                 uploadLayer(this.userImages.layerBorder, 'border'),
                 uploadLayer(this.userImages.seasonLogo, 'season'),
                 uploadLayer(this.userImages.teamLogo, 'team_front'),
-                uploadLayer(this.userImages.teamLogoBack, 'team_back'), // Separate upload
+                uploadLayer(this.userImages.teamLogoBack, 'team_back'),
                 uploadLayer(this.userImages.back, 'back_bg'),
                 uploadLayer(this.userImages.logo1, 'logo1'),
                 uploadLayer(this.userImages.logo2, 'logo2')
             ]);
 
-            // 3. Update Thumbnail (Upsert overwrites the existing file)
+            // 3. Update Thumbnail
             this.renderer.render(this.scene, this.camera);
-
             const thumbBlob = await new Promise(res => this.renderer.domElement.toBlob(res, 'image/webp', 0.8));
-
-            // Log the blob size to ensure it's not 0 (which would cause a 400 error)
-            console.log("Generated Thumbnail Blob size:", thumbBlob.size);
-
             const thumbPath = `thumbs/card_${this.currentLoadedId}.webp`;
 
-            // Ensure the third argument { upsert: true } is present and correct
             const { error: thumbErr } = await window.supabase.storage
                 .from('card-thumbnails')
                 .upload(thumbPath, thumbBlob, { 
                     upsert: true,
-                    contentType: 'image/webp' // Force content type to avoid detection errors
+                    contentType: 'image/webp' 
                 });
 
-            if (thumbErr) {
-                console.error("Thumbnail Upload Error Details:", thumbErr);
-                throw thumbErr;
-            }
-
+            if (thumbErr) throw thumbErr;
             const thumbUrl = window.supabase.storage.from('card-thumbnails').getPublicUrl(thumbPath).data.publicUrl;
 
-            // 4. Create Payload (Matches your simplified Hybrid Structure)
+            // 4. Create Payload (Including NEW Season Data)
             const updateData = {
                 fName: formData.fName,
                 lName: formData.lName,
@@ -929,7 +914,7 @@ window.CardApp = {
                     stats: formData.stats,
                     quote: formData.quote,
                     pNumber: formData.pNumber,
-                    teamColors: currentTeamColors // Keep colors in sync
+                    teamColors: currentTeamColors
                 },
                 styleConfig: {
                     fNameStyle: formData.fNameStyle,
@@ -941,14 +926,21 @@ window.CardApp = {
                     holoPlayer: formData.holoPlayer,
                     holoBorder: formData.holoBorder,
                     isFoil: formData.isFoil,
-                    flakeType: flakeType
+                    flakeType: flakeType,
+                    // --- NEW SEASON TRANSFORM DATA ---
+                    seasonConfig: {
+                        x: parseFloat(document.getElementById('seasonX')?.value || 760),
+                        y: parseFloat(document.getElementById('seasonY')?.value || 1340),
+                        scale: parseFloat(document.getElementById('seasonScale')?.value || 0.5),
+                        rotation: parseFloat(document.getElementById('seasonRot')?.value || 0)
+                    }
                 },
                 imageConfig: {
                     bgUrl, 
                     playerUrl, 
                     borderUrl, 
                     teamLogoUrl, 
-                    teamLogoBackUrl, // Saved in its own slot
+                    teamLogoBackUrl, 
                     seasonLogoUrl, 
                     backBgUrl, 
                     logo1Url, 
@@ -966,7 +958,7 @@ window.CardApp = {
             if (dbErr) throw dbErr;
 
             if (data && data.length > 0) {
-                console.log("✅ Card Updated Successfully");
+                console.log("✅ Card & Season Data Updated Successfully");
                 alert("Card Updated Successfully!");
             }
             
@@ -1059,7 +1051,7 @@ window.CardApp = {
             
             // UI Navigation
             document.getElementById('update-vault-btn')?.classList.remove('hidden');
-            if (typeof switchView === 'function') switchView('creator');
+            if (typeof switchView === 'function') switchView('studio');
 
         } catch (err) {
             console.error("Load Error:", err);
@@ -1077,49 +1069,60 @@ window.CardApp = {
 
         console.log("🛠️ Syncing UI with loaded data...");
 
-        // 1. Internal Helper to find and set UI elements
+        // 1. Mapping Dictionary: Translates DB keys to HTML IDs
+        const idMap = {
+            'x': 'seasonX',
+            'y': 'seasonY',
+            'scale': 'seasonScale',
+            'rotation': 'seasonRot'
+        };
+
         const setVal = (id, val) => {
-            const el = document.getElementById(id);
+            // If the ID is in our map, translate it (e.g., 'x' becomes 'seasonX')
+            const targetId = idMap[id] || id;
+            const el = document.getElementById(targetId);
+            
             if (!el) return;
 
             if (el.type === 'checkbox') {
-                // Handle boolean strings or true booleans
                 el.checked = (val === true || val === 'true');
             } else {
                 el.value = val !== null && val !== undefined ? val : "";
             }
 
-            // Trigger 'input' event so listeners (like the 3D preview) update
+            // Update numeric labels (e.g., valSeasonX) if they exist
+            const label = document.getElementById(`val${targetId.charAt(0).toUpperCase() + targetId.slice(1)}`);
+            if (label) label.textContent = val;
+
             el.dispatchEvent(new Event('input', { bubbles: true }));
         };
 
         if (data.teamColors) {
             window.TeamColors.colors = data.teamColors;
             window.TeamColors.applyColors();
-            // Save to localStorage so the tool stays in sync locally too
             localStorage.setItem('teamColors', JSON.stringify(data.teamColors));
         }
 
         // 2. Process the Data Object
-        // Since we merged all buckets into 'combinedData' in loadFromVault,
-        // we iterate through everything
         Object.keys(data).forEach(key => {
             let val = data[key];
 
-            // 3. Recursive check for nested objects (stats, style objects, logo data)
-            // If the value is an object (and not null), we drill down one level
-            if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+            // Special handling for the new seasonConfig object
+            if (key === 'seasonConfig' && typeof val === 'object' && val !== null) {
                 Object.keys(val).forEach(subKey => {
-                    // This handles stats.spd, fNameStyle.x, teamLogoData.scale, etc.
+                    // This specifically catches 'x', 'y', 'scale', 'rotation'
+                    setVal(subKey, val[subKey]);
+                });
+            } 
+            else if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+                Object.keys(val).forEach(subKey => {
                     setVal(subKey, val[subKey]);
                 });
             } else {
-                // This handles top-level strings like fName, lName, and team
                 setVal(key, val);
             }
         });
 
-        // 4. Force a 3D refresh once the UI fields are populated
         if (window.CardApp && typeof window.CardApp.updateCard === 'function') {
             window.CardApp.updateCard();
         }
